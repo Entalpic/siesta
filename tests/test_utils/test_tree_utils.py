@@ -1,4 +1,5 @@
 # Copyright 2025 Entalpic
+from pathlib import Path
 from textwrap import dedent
 
 import pytest
@@ -45,7 +46,7 @@ def test_tree_no_gitignore(tmp_path_chdir):
     (tmp_path_chdir / ".gitignore").touch()
     (tmp_path_chdir / "src").mkdir()
     (tmp_path_chdir / "src" / "main.py").touch()
-    tree_lines = "\n".join(tree(tmp_path_chdir))
+    tree_lines = "\n".join(t["line"] for t in tree(tmp_path_chdir))
     assert tree_lines == dedent(
         """\
         ├── .gitignore
@@ -60,7 +61,7 @@ def test_tree_with_gitignore(tmp_path_chdir):
     (tmp_path_chdir / "src").mkdir()
     (tmp_path_chdir / "src" / "main.py").touch()
     (tmp_path_chdir / "src" / "main.txt").touch()
-    tree_lines = "\n".join(tree(tmp_path_chdir))
+    tree_lines = "\n".join(t["line"] for t in tree(tmp_path_chdir))
     assert tree_lines == dedent(
         """\
         ├── .gitignore
@@ -78,7 +79,7 @@ def test_tree_with_nested_gitignore(tmp_path_chdir):
     (tmp_path_chdir / "src" / "main.py").touch()
     (tmp_path_chdir / "src" / "main.txt").touch()
     (tmp_path_chdir / "src" / "main.yaml").touch()
-    tree_lines = "\n".join(tree(tmp_path_chdir))
+    tree_lines = "\n".join(t["line"] for t in tree(tmp_path_chdir))
     print(tree_lines)
     print("-----------------")
     assert tree_lines == dedent(
@@ -107,6 +108,7 @@ def test_wrap_consequent_chars():
     )
 
 
+# FIXME
 def test_label_tree():
     tree_lines = dedent(
         """\
@@ -117,14 +119,27 @@ def test_label_tree():
             └── main.yaml
         """.rstrip()
     ).split("\n")
+    tree_paths = [
+        Path(p)
+        for p in [
+            ".gitignore",
+            "file.py",
+            "src",
+            "src/.gitignore",
+            "src/main.yaml",
+        ]
+    ]
+    tree_dicts = [
+        {"line": line, "path": path} for line, path in zip(tree_lines, tree_paths)
+    ]
 
-    assert "\n".join(label_tree(tree_lines, 200)) == wrap_consequent_chars(
+    assert "\n".join(label_tree(tree_dicts, Path(), 200)) == wrap_consequent_chars(
         dedent(
             f"""\
             ├── .gitignore ···· [grey50]# {TREE_LABELS[".gitignore"]}[/grey50]
             ├── file.py
             └── src/ ·········· [grey50]# {TREE_LABELS["src/"]}[/grey50]
-                ├── .gitignore  [grey50]# {TREE_LABELS[".gitignore"]}[/grey50]
+                ├── .gitignore
                 └── main.yaml
             """.rstrip()
         ),
