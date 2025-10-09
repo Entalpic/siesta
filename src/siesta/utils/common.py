@@ -206,5 +206,5 @@ def get_project_name(with_defaults: bool, snake_case: bool = False) -> str:
     default = pyproject_name or resolve_path(".").name
     name = default if with_defaults else logger.prompt("Project name", default=default)
     if snake_case:
-        name = name.lower().replace(" ", "_")
+        name = name.lower().replace(" ", "_").replace("-", "_")
     return name

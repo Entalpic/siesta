@@ -155,7 +155,6 @@ def write_rtd_config() -> None:
     }
 
     safe_dump(config, rtd)
-    logger.info("ReadTheDocs file written.")
 
 
 def update_conf_py(dest: Path, branch: str = "main"):

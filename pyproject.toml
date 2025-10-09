@@ -11,6 +11,7 @@ dependencies = [
     "keyring>=25.5.0",
     "ruamel-yaml>=0.18.6",
     "watchdog>=6.0.0",
+    "gitignore-parser>=0.1.13",
 ]
 
 [project.scripts]
