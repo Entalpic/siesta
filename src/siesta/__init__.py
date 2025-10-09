@@ -183,17 +183,17 @@ When running ``$ siesta docs init`` the following happens:
 """
 
 import importlib.metadata
+import os
 
 __version__ = importlib.metadata.version("siesta")
 
 try:
-    import os
-
     import ipdb  # noqa: F401
 
     # set ipdb as default debugger when calling `breakpoint()`
     os.environ["PYTHONBREAKPOINT"] = "ipdb.set_trace"
 except ImportError:
-    print(
-        "ipdb not available. Consider adding it to your dev stack for a smoother debugging experience"
-    )
+    if os.environ.get("SIESTA_DEV"):
+        print(
+            "ipdb not available. Consider adding it to your dev stack for a smoother debugging experience"
+        )
