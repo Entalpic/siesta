@@ -29,10 +29,13 @@ from typing import TYPE_CHECKING
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from github import Github, GithubException
+from github.Auth import Token
 from packaging.version import Version
 from platformdirs import user_cache_dir
 
 from siesta.utils.common import logger, run_command
+from siesta.utils.github import get_user_pat
 
 if TYPE_CHECKING:
     from typing import TypedDict
@@ -161,9 +164,6 @@ def _get_latest_version_github(timeout: float = 5.0) -> str | None:
     str | None
         The latest version string, or ``None`` if the query failed.
     """
-    from github import Github, GithubException
-
-    from siesta.utils.github import get_user_pat
 
     def try_get_version(g: Github) -> str | None:
         """Try to get version from releases, then tags."""
@@ -209,8 +209,6 @@ def _get_latest_version_github(timeout: float = 5.0) -> str | None:
     pat = get_user_pat()
     if pat:
         try:
-            from github.Auth import Token
-
             g = Github(auth=Token(pat), timeout=int(timeout))
             result = try_get_version(g)
             if result:
