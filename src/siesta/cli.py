@@ -91,7 +91,7 @@ app = App(
     
     A set of CLI tools to help you with good practices in Python development at Entalpic.
 
-    Upgrade with ``$ uv tool upgrade siesta``.
+    Upgrade with ``$ siesta self update``.
 
     See Usage instructions in the online docs: https://entalpic-siesta.readthedocs-hosted.com/en/latest/autoapi/siesta/.
     """.strip()
@@ -105,7 +105,7 @@ docs_app = App(
         """
         Initialize, build and watch a Sphinx documentation project with standard Entalpic config.
 
-        Upgrade with ``$ uv tool upgrade siesta``.
+        Upgrade with ``$ siesta self update``.
 
         See Usage instructions in the online docs: https://entalpic-siesta.readthedocs-hosted.com/en/latest/autoapi/siesta.
 
@@ -120,7 +120,7 @@ project_app = App(
         """
         Initialize a Python project with standard Entalpic config.
 
-        Upgrade with ``$ uv tool upgrade siesta``.
+        Upgrade with ``$ siesta self update``.
 
         See Usage instructions in the online docs: https://entalpic-siesta.readthedocs-hosted.com/en/latest/autoapi/siesta.
 

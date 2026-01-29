@@ -110,7 +110,7 @@ to access the files.
 Going further
 =============
 
-Currently ``siesta`` has 4 main entry points with subcommands:
+Currently ``siesta`` has 5 main entry points with subcommands:
 
 **Top-level commands:**
 - ``set-github-pat`` to set your Github Personal Access Token (PAT) to access remote
@@ -129,6 +129,12 @@ Currently ``siesta`` has 4 main entry points with subcommands:
 **``project`` subcommands:**
 - ``project quickstart`` to create a new Python project with ``uv`` and set up
   documentation as per ``docs init``.
+
+**``self`` subcommands:**
+- ``self version`` to show the current siesta version and check for updates.
+- ``self update`` (or ``self upgrade``) to update siesta to the latest version.
+  Automatically detects how siesta was installed (uv tool, pipx, pip) and uses the
+  appropriate update command.
 
 .. tip::
 
