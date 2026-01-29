@@ -110,7 +110,7 @@ to access the files.
 Going further
 =============
 
-Currently ``siesta`` has 4 main entry points with subcommands:
+Currently ``siesta`` has 5 main entry points with subcommands:
 
 **Top-level commands:**
 - ``set-github-pat`` to set your Github Personal Access Token (PAT) to access remote
@@ -118,7 +118,7 @@ Currently ``siesta`` has 4 main entry points with subcommands:
 - ``show-deps`` to show the dependencies that will be added to your project to make
   docs.
 
-**``docs`` subcommands:**
+** ``docs`` subcommands:**
 - ``docs init`` to create a docs folder and get started with your current project's
   documentation.
 - ``docs build`` to build the HTML documentation locally (equivalent to running
@@ -126,9 +126,21 @@ Currently ``siesta`` has 4 main entry points with subcommands:
 - ``docs update`` to update the documentation boilerplate files in your project from Github. Typically updating the brand assets and colors.
 - ``docs watch`` to automatically build the docs when source files are changed.
 
-**``project`` subcommands:**
+** ``project`` subcommands:**
 - ``project quickstart`` to create a new Python project with ``uv`` and set up
   documentation as per ``docs init``.
+
+** ``self`` subcommands:**
+- ``self version`` to show the current siesta version and check for updates.
+- ``self update`` (or ``self upgrade``) to update siesta to the latest version.
+  Automatically detects how siesta was installed (uv tool, pipx, pip) and uses the
+  appropriate update command.
+
+.. note::
+
+    siesta checks for updates in the background (cached for 24 hours). To change
+    the frequency, set the ``SIESTA_UPDATE_CHECK_HOURS`` environment variable.
+    Set it to ``"false"`` or ``"-1"`` to disable automatic checks.
 
 .. tip::
 
@@ -158,27 +170,6 @@ When running ``$ siesta docs init`` the following happens:
 
     ``siesta`` will abort if the target folder already exists. Use ``--overwrite`` to
     delete the folder if it exists before setting up the documentation.
-
-
-.. tip::
-
-    We won't need maths here, but if you wanted to, you could use ``$`` for
-    inline-maths: $1 + e^{i\pi} = 0$ or ``$$`` for block-maths:
-    $$
-    \sum_{k=1}^{k=+\infty} \frac{1}{k^2} = \frac{\pi^2}{6}
-    $$
-
-.. important::
-
-    Remember to use **raw** strings when you use maths: ``r"$1 + e^{i\pi} = 0$"`` or
-
-    .. code-block:: python
-
-        r'''
-        $$
-        1 + e^{i\pi} = 0
-        $$
-        '''
 
 """
 

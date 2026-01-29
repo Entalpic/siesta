@@ -32,8 +32,15 @@ Use `siesta` to initialize
     siesta docs watch
     ```
 
+5. Check for updates and upgrade siesta
+
+    ```bash
+    siesta self version
+    siesta self update  # or: siesta self upgrade
+    ```
+
 > [!NOTE]
-> You can always get help with `siesta --help` or `siesta docs --help` or `siesta project --help`
+> You can always get help with `siesta --help` or `siesta docs --help` or `siesta project --help` or `siesta self --help`
 
 ## Installation
 
@@ -44,7 +51,8 @@ uv tool install git+ssh://git@github.com/entalpic/siesta.git
 ## Upgrade
 
 ```bash
-uv tool upgrade siesta
+siesta self update
+# or manually: uv tool upgrade siesta
 ```
 
 See [**Usage instructions in the online docs**](https://entalpic-siesta.readthedocs-hosted.com/en/latest/autoapi/siesta/cli/index.html).
@@ -74,6 +82,6 @@ That's it 🤓
 
 This is still very WIP. In particular, next steps:
 
--   Update Contribution Guide
--   Add ReadTheDocs deployment instructions
--   More tests
+- Update Contribution Guide
+- Add ReadTheDocs deployment instructions
+- More tests

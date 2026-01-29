@@ -22,10 +22,21 @@ Learn how to use with:
     $ siesta project quickstart
     $ siesta project tree
 
+    $ siesta self # shows help
+    $ siesta self version
+    $ siesta self update  # or: siesta self upgrade
+
     $ siesta set-github-pat
     $ siesta show-deps
 
 You can also refer to the :ref:`siesta-cli-tutorial` for more information.
+
+.. note::
+
+    siesta checks for updates in the background (cached for 24 hours). To change
+    the frequency, set the ``SIESTA_UPDATE_CHECK_HOURS`` environment variable.
+    Set it to ``"false"`` or ``"-1"`` to disable automatic checks.
+
 """
 
 import getpass
@@ -68,6 +79,15 @@ from siesta.utils.project import (
     write_test_actions_config,
     write_tests_infra,
 )
+from siesta.utils.self import (
+    compare_versions,
+    get_installation_method,
+    get_latest_version,
+    get_update_command,
+    get_update_message,
+    start_background_update_check,
+    update_siesta,
+)
 from siesta.utils.tree import make_labeled_tree
 
 # Main app
@@ -78,7 +98,7 @@ app = App(
     
     A set of CLI tools to help you with good practices in Python development at Entalpic.
 
-    Upgrade with ``$ uv tool upgrade siesta``.
+    Upgrade with ``$ siesta self update``.
 
     See Usage instructions in the online docs: https://entalpic-siesta.readthedocs-hosted.com/en/latest/autoapi/siesta/.
     """.strip()
@@ -92,7 +112,7 @@ docs_app = App(
         """
         Initialize, build and watch a Sphinx documentation project with standard Entalpic config.
 
-        Upgrade with ``$ uv tool upgrade siesta``.
+        Upgrade with ``$ siesta self update``.
 
         See Usage instructions in the online docs: https://entalpic-siesta.readthedocs-hosted.com/en/latest/autoapi/siesta.
 
@@ -107,7 +127,7 @@ project_app = App(
         """
         Initialize a Python project with standard Entalpic config.
 
-        Upgrade with ``$ uv tool upgrade siesta``.
+        Upgrade with ``$ siesta self update``.
 
         See Usage instructions in the online docs: https://entalpic-siesta.readthedocs-hosted.com/en/latest/autoapi/siesta.
 
@@ -116,16 +136,36 @@ project_app = App(
 )
 """:py:class:`cyclopts.App`: The app for the ``siesta project`` sub-command."""
 
+self_app = App(
+    name="self",
+    help=dedent(
+        """
+        Manage siesta itself: check version, update to the latest release.
+
+        """.strip(),
+    ),
+)
+""":py:class:`cyclopts.App`: The app for the ``siesta self`` sub-command."""
+
 app.command(docs_app)
 app.command(project_app)
+app.command(self_app)
 
 
 def main():
     """Run the CLI, gracefully handling ``KeyboardInterrupt``."""
+    # Start background update check (non-blocking)
+    update_future = start_background_update_check(metadata.version("siesta"))
+
     try:
         app()
     except KeyboardInterrupt:
         logger.abort("\nAborted.", exit=1)
+    finally:
+        # Show update message at the end (if available)
+        update_msg = get_update_message(update_future)
+        if update_msg:
+            logger.print(update_msg)
 
 
 @app.command(name="set-github-pat")
@@ -793,3 +833,125 @@ def tree_project(path: str = ".", ignore_from_gitignore: bool = True):
         as_panel=True,
         title="Your project's directory structure",
     )
+
+
+# ============================================================================
+# Self commands
+# ============================================================================
+
+
+@self_app.command(name="version")
+def self_version():
+    """Show the current siesta version and check for updates.
+
+    Displays the installed version, installation method, and whether
+    a newer version is available on PyPI.
+    """
+    from siesta import __version__
+
+    # Get installation method
+    method = get_installation_method()
+    method_display = {
+        "uv": "uv tool",
+        "pipx": "pipx",
+        "pip": "pip",
+        "editable": "editable (development)",
+    }.get(method, method)
+
+    logger.info(f"siesta version: [r]{__version__}[/r]")
+    logger.info(f"Installation method: [r]{method_display}[/r]")
+
+    # Check for updates
+    with logger.loading("Checking for updates..."):
+        latest = get_latest_version()
+
+    if latest is None:
+        logger.warning("Could not check for updates (network error).")
+        return
+
+    comparison = compare_versions(__version__, latest)
+    if comparison < 0:
+        logger.warning(f"A newer version is available: [r]{latest}[/r]")
+        logger.info("Run [r]siesta self update[/r] to upgrade.")
+    elif comparison > 0:
+        logger.info("You are running a pre-release or development version.")
+        logger.info(f"Latest stable release: [r]{latest}[/r]")
+    else:
+        logger.success("You are running the latest version.")
+
+
+@self_app.command(name="update")
+def self_update(force: bool = False, dry: bool = False):
+    """Update siesta to the latest version.
+
+    Automatically detects how siesta was installed (uv tool, pipx, pip, or editable)
+    and uses the appropriate update command (uv tool, pipx, pip), except for editable
+    installations (i.e. when siesta is installed from source) in which case it
+    shows a warning and suggests manual steps.
+
+    Parameters
+    ----------
+    force : bool, optional
+        Force update even if already on the latest version.
+    dry : bool, optional
+        Show what would be done without actually updating.
+    """
+    from siesta import __version__
+
+    # Get installation method
+    method = get_installation_method()
+    method_display = {"uv": "uv tool", "pipx": "pipx", "pip": "pip"}.get(method, method)
+
+    # Handle editable installations
+    if method == "editable":
+        logger.warning("siesta is installed in editable (development) mode.")
+        logger.info("To update, navigate to the source directory and run:")
+        logger.info("  [r]git pull[/r]")
+        logger.info("  [r]uv pip install -e .[/r]  (or pip install -e .)")
+        return
+
+    # Dry run: just show what would be done
+    if dry:
+        cmd = get_update_command(method)
+        logger.info(f"Installation method: [r]{method_display}[/r]")
+        logger.info(f"Would run: [r]{' '.join(cmd)}[/r]")
+        return
+
+    # Check current vs latest version
+    with logger.loading("Checking for updates..."):
+        latest = get_latest_version()
+
+    if latest is None:
+        logger.warning("Could not check for latest version (network error).")
+        if not force:
+            logger.info("Use [r]--force[/r] to update anyway.")
+            return
+
+    if latest and not force:
+        comparison = compare_versions(__version__, latest)
+        if comparison >= 0:
+            logger.success(f"Already up to date (version {__version__}).")
+            return
+
+    # Perform the update
+    logger.info(f"Updating siesta via {method_display}...")
+
+    success = update_siesta(method)
+    if success:
+        logger.success("siesta has been updated successfully.")
+        logger.info(
+            "Restart your terminal or run [r]siesta self version[/r] to verify."
+        )
+    else:
+        logger.error("Update failed.")
+        logger.info("Try updating manually:")
+        if method == "uv":
+            logger.info("  [r]uv tool upgrade siesta[/r]")
+        elif method == "pipx":
+            logger.info("  [r]pipx upgrade siesta[/r]")
+        else:
+            logger.info("  [r]pip install --upgrade siesta[/r]")
+
+
+# Register 'upgrade' as an alias for 'update'
+self_app.command(self_update, name="upgrade")

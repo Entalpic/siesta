@@ -16,8 +16,8 @@ Using siesta:
 .. code-block:: bash
 
    $ uv tool install git+ssh://git@github.com/entalpic/siesta.git
-   # then
-   $ uv tool upgrade siesta
+   # update:
+   $ uvx siesta self update
 
 TL;DR
 -----
@@ -31,6 +31,9 @@ TL;DR
 
    # 2️⃣ Build docs
    $ siesta docs build
+
+   # 3️⃣ Open docs in browser
+   $ siesta docs open
 
 
 Contributing
