@@ -77,6 +77,8 @@ from siesta.utils.self import (
     get_installation_method,
     get_latest_version,
     get_update_command,
+    get_update_message,
+    start_background_update_check,
     update_siesta,
 )
 from siesta.utils.tree import make_labeled_tree
@@ -145,10 +147,18 @@ app.command(self_app)
 
 def main():
     """Run the CLI, gracefully handling ``KeyboardInterrupt``."""
+    # Start background update check (non-blocking)
+    update_future = start_background_update_check(metadata.version("siesta"))
+
     try:
         app()
     except KeyboardInterrupt:
         logger.abort("\nAborted.", exit=1)
+    finally:
+        # Show update message at the end (if available)
+        update_msg = get_update_message(update_future)
+        if update_msg:
+            logger.print(update_msg)
 
 
 @app.command(name="set-github-pat")

@@ -1,19 +1,47 @@
 # Copyright 2025 Entalpic
 """Utility functions for siesta self-management (version, update)."""
 
+from __future__ import annotations
+
 import json
+import os
 import sys
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from importlib import metadata
+from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.error import URLError
 from urllib.request import urlopen
 
 from packaging.version import Version
+from platformdirs import user_cache_dir
 
 from siesta.utils.common import logger, run_command
+
+if TYPE_CHECKING:
+    from typing import TypedDict
+
+    class CacheData(TypedDict):
+        last_check: float
+        latest_version: str | None
+
 
 # Package name for PyPI
 PACKAGE_NAME = "siesta"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
+
+# Environment variable for update check frequency (in hours)
+# Set to "false", "False", or "-1" to disable
+UPDATE_CHECK_ENV_VAR = "SIESTA_UPDATE_CHECK_HOURS"
+DEFAULT_UPDATE_CHECK_HOURS = 24
+
+# Cache file location (uses platform-appropriate directory)
+# - macOS: ~/Library/Caches/siesta
+# - Linux: ~/.cache/siesta (or $XDG_CACHE_HOME/siesta)
+# - Windows: C:\Users\<user>\AppData\Local\siesta\Cache
+_CACHE_DIR = Path(user_cache_dir(PACKAGE_NAME))
+_CACHE_FILE = _CACHE_DIR / "update_check.json"
 
 
 def get_installation_method() -> str:
@@ -179,3 +207,205 @@ def update_siesta(method: str | None = None) -> bool:
         return False
 
     return True
+
+
+# =============================================================================
+# Background update check functionality
+# =============================================================================
+
+
+def _get_update_check_hours() -> float | None:
+    """Get the update check frequency from environment variable.
+
+    Returns
+    -------
+    float | None
+        The number of hours between checks, or ``None`` if checks are disabled.
+    """
+    value = os.environ.get(UPDATE_CHECK_ENV_VAR, str(DEFAULT_UPDATE_CHECK_HOURS))
+    value_lower = value.lower().strip()
+
+    # Check for disabled values
+    if value_lower in ("false", "-1"):
+        return None
+
+    try:
+        hours = float(value)
+        if hours < 0:
+            return None
+        return hours
+    except ValueError:
+        # Invalid value, use default
+        return DEFAULT_UPDATE_CHECK_HOURS
+
+
+def _read_cache() -> CacheData | None:
+    """Read the update check cache file.
+
+    Returns
+    -------
+    CacheData | None
+        The cached data, or ``None`` if the cache doesn't exist or is invalid.
+    """
+    if not _CACHE_FILE.exists():
+        return None
+
+    try:
+        with _CACHE_FILE.open() as f:
+            data = json.load(f)
+            # Validate structure
+            if "last_check" in data:
+                return data
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    return None
+
+
+def _write_cache(latest_version: str | None) -> None:
+    """Write the update check cache file.
+
+    Parameters
+    ----------
+    latest_version : str | None
+        The latest version found, or ``None`` if the check failed.
+    """
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with _CACHE_FILE.open("w") as f:
+            json.dump(
+                {
+                    "last_check": time.time(),
+                    "latest_version": latest_version,
+                },
+                f,
+            )
+    except OSError:
+        # Silently ignore cache write failures
+        pass
+
+
+def _should_check_for_updates() -> bool:
+    """Determine if we should check for updates.
+
+    Takes into account:
+    - Environment variable settings
+    - Editable installations (skip)
+    - Cache freshness
+
+    Returns
+    -------
+    bool
+        ``True`` if we should check for updates, ``False`` otherwise.
+    """
+    # Check if disabled via environment variable
+    check_hours = _get_update_check_hours()
+    if check_hours is None:
+        return False
+
+    # Skip for editable installations
+    if get_installation_method() == "editable":
+        return False
+
+    # Check cache freshness
+    cache = _read_cache()
+    if cache is not None:
+        last_check = cache.get("last_check", 0)
+        age_hours = (time.time() - last_check) / 3600
+        if age_hours < check_hours:
+            return False
+
+    return True
+
+
+def _check_for_updates_sync(current_version: str) -> tuple[str, str] | None:
+    """Synchronously check for updates (called in background thread).
+
+    Parameters
+    ----------
+    current_version : str
+        The current installed version.
+
+    Returns
+    -------
+    tuple[str, str] | None
+        A tuple of (current_version, latest_version) if an update is available,
+        or ``None`` if up to date or check failed.
+    """
+    latest = get_latest_version(timeout=3.0)
+    _write_cache(latest)
+
+    if latest is None:
+        return None
+
+    if compare_versions(current_version, latest) < 0:
+        return (current_version, latest)
+
+    return None
+
+
+# Global executor for background checks
+_executor: ThreadPoolExecutor | None = None
+
+
+def start_background_update_check(current_version: str) -> Future | None:
+    """Start a background check for updates.
+
+    This function returns immediately. Use ``get_update_message()`` to get
+    the result after the command has finished.
+
+    Parameters
+    ----------
+    current_version : str
+        The current installed version.
+
+    Returns
+    -------
+    Future | None
+        A Future that will contain the update info, or ``None`` if the check
+        was skipped (disabled, cached, or editable install).
+    """
+    if not _should_check_for_updates():
+        return None
+
+    global _executor
+    if _executor is None:
+        # Use a single-thread executor that won't block shutdown
+        _executor = ThreadPoolExecutor(max_workers=1)
+
+    return _executor.submit(_check_for_updates_sync, current_version)
+
+
+def get_update_message(future: Future | None, timeout: float = 0.5) -> str | None:
+    """Get the update message from a background check.
+
+    Parameters
+    ----------
+    future : Future | None
+        The Future returned by ``start_background_update_check()``.
+    timeout : float, optional
+        Maximum time to wait for the result, by default 0.5 seconds.
+
+    Returns
+    -------
+    str | None
+        The update message to display, or ``None`` if no update is available
+        or the check timed out/failed.
+    """
+    if future is None:
+        return None
+
+    try:
+        result = future.result(timeout=timeout)
+        if result is not None:
+            current, latest = result
+            return (
+                f"\n[yellow]A new version of siesta is available: "
+                f"[bold]{latest}[/bold] (you have {current})[/yellow]\n"
+                f"[dim]Run [bold]siesta self update[/bold] to upgrade.[/dim]"
+            )
+    except Exception:
+        # Timeout or other error - silently ignore
+        pass
+
+    return None

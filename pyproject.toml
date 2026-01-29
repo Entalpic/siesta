@@ -13,6 +13,7 @@ dependencies = [
     "watchdog>=6.0.0",
     "gitignore-parser>=0.1.13",
     "packaging>=24.0",
+    "platformdirs>=4.0.0",
 ]
 
 [project.scripts]
