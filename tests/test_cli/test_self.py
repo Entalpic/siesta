@@ -240,3 +240,54 @@ class TestSelfUpdateCommand:
         output_str = output.getvalue()
         # Should work without error, showing same behavior as update
         assert "up to date" in output_str.lower() or __version__ in output_str
+
+    def test_dry_run_shows_command_uv(self, capture_output):
+        """Test that --dry shows the uv command without executing."""
+        with (
+            patch("siesta.cli.get_installation_method", return_value="uv"),
+            capture_output() as output,
+        ):
+            try:
+                app(["self", "update", "--dry"])
+            except SystemExit:
+                pass
+
+        output_str = output.getvalue()
+        assert "uv tool" in output_str.lower()
+        assert "would run" in output_str.lower()
+        assert "uv tool upgrade siesta" in output_str.lower()
+
+    def test_dry_run_shows_command_pipx(self, capture_output):
+        """Test that --dry shows the pipx command without executing."""
+        with (
+            patch("siesta.cli.get_installation_method", return_value="pipx"),
+            capture_output() as output,
+        ):
+            try:
+                app(["self", "update", "--dry"])
+            except SystemExit:
+                pass
+
+        output_str = output.getvalue()
+        assert "pipx" in output_str.lower()
+        assert "would run" in output_str.lower()
+        assert "pipx upgrade siesta" in output_str.lower()
+
+    def test_dry_run_shows_command_pip(self, capture_output):
+        """Test that --dry shows the pip command without executing."""
+        with (
+            patch("siesta.cli.get_installation_method", return_value="pip"),
+            capture_output() as output,
+        ):
+            try:
+                app(["self", "update", "--dry"])
+            except SystemExit:
+                pass
+
+        output_str = output.getvalue()
+        assert "pip" in output_str.lower()
+        assert "would run" in output_str.lower()
+        # The pip command uses `python -m pip install --upgrade siesta`
+        # Output may be wrapped across lines, so check for key parts
+        assert "-m pip" in output_str.lower()
+        assert "--upgrade siesta" in output_str.lower()

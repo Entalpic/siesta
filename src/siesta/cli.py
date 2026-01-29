@@ -76,6 +76,7 @@ from siesta.utils.self import (
     compare_versions,
     get_installation_method,
     get_latest_version,
+    get_update_command,
     update_siesta,
 )
 from siesta.utils.tree import make_labeled_tree
@@ -863,7 +864,7 @@ def self_version():
 
 
 @self_app.command(name="update")
-def self_update(force: bool = False):
+def self_update(force: bool = False, dry: bool = False):
     """Update siesta to the latest version.
 
     Automatically detects how siesta was installed (uv tool, pipx, pip, or editable)
@@ -875,11 +876,14 @@ def self_update(force: bool = False):
     ----------
     force : bool, optional
         Force update even if already on the latest version.
+    dry : bool, optional
+        Show what would be done without actually updating.
     """
     from siesta import __version__
 
     # Get installation method
     method = get_installation_method()
+    method_display = {"uv": "uv tool", "pipx": "pipx", "pip": "pip"}.get(method, method)
 
     # Handle editable installations
     if method == "editable":
@@ -887,6 +891,13 @@ def self_update(force: bool = False):
         logger.info("To update, navigate to the source directory and run:")
         logger.info("  [r]git pull[/r]")
         logger.info("  [r]uv pip install -e .[/r]  (or pip install -e .)")
+        return
+
+    # Dry run: just show what would be done
+    if dry:
+        cmd = get_update_command(method)
+        logger.info(f"Installation method: [r]{method_display}[/r]")
+        logger.info(f"Would run: [r]{' '.join(cmd)}[/r]")
         return
 
     # Check current vs latest version
@@ -906,7 +917,6 @@ def self_update(force: bool = False):
             return
 
     # Perform the update
-    method_display = {"uv": "uv tool", "pipx": "pipx", "pip": "pip"}.get(method, method)
     logger.info(f"Updating siesta via {method_display}...")
 
     success = update_siesta(method)
