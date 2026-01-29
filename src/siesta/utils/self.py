@@ -1,5 +1,20 @@
 # Copyright 2025 Entalpic
-"""Utility functions for siesta self-management (version, update)."""
+"""Utility functions for siesta self-management (version, update).
+
+This module provides functionality for:
+
+- Detecting how siesta was installed (uv tool, pipx, pip, or editable)
+- Checking PyPI for the latest version
+- Updating siesta using the appropriate package manager
+- Background update checks with caching
+
+Environment Variables
+---------------------
+SIESTA_UPDATE_CHECK_HOURS : str
+    Controls how often siesta checks for updates in the background.
+    Default is ``"24"`` (once per day). Set to ``"false"`` or ``"-1"``
+    to disable automatic update checks entirely.
+"""
 
 from __future__ import annotations
 

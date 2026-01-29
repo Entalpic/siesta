@@ -30,6 +30,13 @@ Learn how to use with:
     $ siesta show-deps
 
 You can also refer to the :ref:`siesta-cli-tutorial` for more information.
+
+.. note::
+
+    siesta checks for updates in the background (cached for 24 hours). To change
+    the frequency, set the ``SIESTA_UPDATE_CHECK_HOURS`` environment variable.
+    Set it to ``"false"`` or ``"-1"`` to disable automatic checks.
+
 """
 
 import getpass
