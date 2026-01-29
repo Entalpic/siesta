@@ -46,6 +46,10 @@ if TYPE_CHECKING:
 PACKAGE_NAME = "siesta"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
 
+# GitHub repo info
+GITHUB_OWNER = "entalpic"
+GITHUB_REPO = "siesta"
+
 # Environment variable for update check frequency (in hours)
 # Set to "false", "False", or "-1" to disable
 UPDATE_CHECK_ENV_VAR = "SIESTA_UPDATE_CHECK_HOURS"
@@ -107,7 +111,117 @@ def get_installation_method() -> str:
     return "pip"
 
 
-def get_latest_version(timeout: float = 5.0) -> str | None:
+def get_installation_source() -> str:
+    """Detect the source from which siesta was installed.
+
+    Returns
+    -------
+    str
+        One of: ``"github"`` or ``"pypi"``.
+
+    Notes
+    -----
+    Detection is based on the ``direct_url.json`` metadata:
+
+    - If ``vcs_info`` is present with ``vcs: "git"`` → GitHub installation
+    - Otherwise → PyPI installation
+    """
+    try:
+        dist = metadata.distribution(PACKAGE_NAME)
+        try:
+            direct_url_text = dist.read_text("direct_url.json")
+            if direct_url_text:
+                direct_url = json.loads(direct_url_text)
+                # Check for VCS (git) installation
+                vcs_info = direct_url.get("vcs_info", {})
+                if vcs_info.get("vcs") == "git":
+                    return "github"
+        except FileNotFoundError:
+            pass
+    except metadata.PackageNotFoundError:
+        pass
+
+    return "pypi"
+
+
+def _get_latest_version_github(timeout: float = 5.0) -> str | None:
+    """Query GitHub for the latest siesta version.
+
+    First tries without authentication (public repo), then falls back to
+    PAT authentication if rate-limited or if access is denied.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for the HTTP request in seconds, by default 5.0.
+        Note: PyGithub uses its own timeout handling.
+
+    Returns
+    -------
+    str | None
+        The latest version string, or ``None`` if the query failed.
+    """
+    from github import Github, GithubException
+
+    from siesta.utils.github import get_user_pat
+
+    def try_get_version(g: Github) -> str | None:
+        """Try to get version from releases, then tags."""
+        try:
+            repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
+
+            # Try releases first
+            try:
+                release = repo.get_latest_release()
+                tag_name = release.tag_name
+                return tag_name.lstrip("v") if tag_name else None
+            except GithubException as e:
+                # 404 means no releases, try tags
+                if e.status == 404:
+                    pass
+                else:
+                    raise
+
+            # Fall back to tags
+            tags = repo.get_tags()
+            if tags.totalCount > 0:
+                tag_name = tags[0].name
+                return tag_name.lstrip("v") if tag_name else None
+
+        except GithubException:
+            raise
+
+        return None
+
+    # Try unauthenticated first (public repo)
+    try:
+        g = Github(timeout=int(timeout))
+        result = try_get_version(g)
+        if result:
+            return result
+    except GithubException as e:
+        # 403 often means rate limited, will try with auth
+        if e.status != 403:
+            logger.warning(f"Failed to fetch latest version from GitHub: {e}")
+            return None
+
+    # Fall back to PAT authentication (for rate limiting)
+    pat = get_user_pat()
+    if pat:
+        try:
+            from github.Auth import Token
+
+            g = Github(auth=Token(pat), timeout=int(timeout))
+            result = try_get_version(g)
+            if result:
+                return result
+        except GithubException as e:
+            logger.warning(f"Failed to fetch latest version from GitHub: {e}")
+
+    return None
+
+
+def _get_latest_version_pypi(timeout: float = 5.0) -> str | None:
     """Query PyPI for the latest siesta version.
 
     Parameters
@@ -127,6 +241,36 @@ def get_latest_version(timeout: float = 5.0) -> str | None:
     except (URLError, json.JSONDecodeError, TimeoutError) as e:
         logger.warning(f"Failed to fetch latest version from PyPI: {e}")
         return None
+
+
+def get_latest_version(timeout: float = 5.0, source: str | None = None) -> str | None:
+    """Query the appropriate source for the latest siesta version.
+
+    The source is determined by how siesta was installed:
+
+    - If installed from GitHub (via git URL), queries GitHub releases/tags
+    - If installed from PyPI, queries PyPI
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for the HTTP request in seconds, by default 5.0.
+    source : str | None, optional
+        The source to query (``"github"`` or ``"pypi"``).
+        If ``None``, it will be auto-detected based on installation method.
+
+    Returns
+    -------
+    str | None
+        The latest version string, or ``None`` if the query failed.
+    """
+    if source is None:
+        source = get_installation_source()
+
+    if source == "github":
+        return _get_latest_version_github(timeout=timeout)
+    else:
+        return _get_latest_version_pypi(timeout=timeout)
 
 
 def compare_versions(current: str, latest: str) -> int:
