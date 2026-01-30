@@ -20,6 +20,7 @@ Learn how to use with:
 
     $ siesta project # shows help
     $ siesta project quickstart
+    $ siesta project setup-tests
     $ siesta project tree
 
     $ siesta self # shows help
@@ -125,7 +126,7 @@ project_app = App(
     name="project",
     help=dedent(
         """
-        Initialize a Python project with standard Entalpic config.
+        Initialize and manage Python projects with standard Entalpic config.
 
         Upgrade with ``$ siesta self update``.
 
@@ -614,9 +615,16 @@ def quickstart_project(
 
     * Initializes a new ``uv`` project with ``$ uv init``.
     * Installs recommended dependencies with ``$ uv add --dev [...]``.
+    * Sets up pytest testing infrastructure (via ``siesta project setup-tests``).
+    * Sets up GitHub Actions for CI.
     * Initializes a new Sphinx project at the specified path as per ``$ siesta
       docs init``.
     * Initializes pre-commit hooks with ``$ uv run pre-commit install``.
+
+    .. tip::
+
+        If you only need to add testing infrastructure to an existing project,
+        use ``siesta project setup-tests`` instead.
 
     .. note::
 
@@ -631,6 +639,7 @@ def quickstart_project(
 
         - Install recommended dependencies.
         - Initialize pre-commit hooks.
+        - Initialize pytest testing infrastructure and GitHub Actions.
         - Initialize the docs.
 
     .. important::
@@ -769,13 +778,14 @@ def quickstart_project(
     if tests is None:
         tests = logger.confirm("Would you like to initialize (pytest) tests infra?")
     if tests:
-        write_tests_infra(project_name)
-        logger.info("Tests infra written.")
-    if actions is None:
-        actions = logger.confirm("Would you like to initialize GitHub Actions?")
-    if actions:
-        write_test_actions_config()
-        logger.info("Test actions config written.")
+        # Use setup_tests but skip deps (already installed above) and with_defaults
+        # (already handled above), and pass actions directly
+        setup_tests(
+            project_name=project_name,
+            actions=actions,
+            deps=False,  # deps already handled by quickstart
+            with_defaults=False,  # we already processed defaults above
+        )
     if gitignore is None:
         gitignore = logger.confirm(
             "Would you like to initialize the ``.gitignore`` file?"
@@ -801,6 +811,105 @@ def quickstart_project(
     tree_project(".")
     logger.info("Project initialized.")
     logger.success("🔥 Happy coding! 👋")
+
+
+@project_app.command(name="setup-tests")
+def setup_tests(
+    project_name: str | None = None,
+    actions: bool | None = None,
+    deps: bool | None = None,
+    with_defaults: bool = True,
+):
+    """Set up pytest testing infrastructure for an existing project.
+
+    This command adds testing infrastructure to an existing Python project:
+
+    - Installs ``pytest`` and ``pytest-cov`` as dev dependencies.
+    - Creates a ``tests/`` directory with an example test file.
+    - Optionally sets up GitHub Actions for CI (runs tests on PRs and pushes to main).
+
+    .. tip::
+
+        This is useful when you have an existing project that doesn't have tests yet,
+        or when you want to add Entalpic's standard testing setup to a project.
+
+    .. note::
+
+        This command assumes a ``uv``-based project (``uv.lock`` exists).
+        If ``uv.lock`` is not found, dependencies will be installed with ``pip``.
+
+    Example
+    -------
+    .. code-block:: bash
+
+        # Set up tests with all defaults (installs deps + GitHub Actions)
+        $ siesta project setup-tests
+
+        # Set up tests without GitHub Actions
+        $ siesta project setup-tests --no-actions --no-with-defaults
+
+        # Set up tests for a specific project name
+        $ siesta project setup-tests --project-name=myproject
+
+    Parameters
+    ----------
+    project_name : str, optional
+        The project's name. If not provided, it will be detected from ``pyproject.toml``
+        or prompted.
+    actions : bool, optional
+        Whether to initialize GitHub Actions, by default ``None`` (i.e. prompt the user
+        unless ``--with-defaults`` is used, in which case it defaults to ``True``).
+    deps : bool, optional
+        Whether to install test dependencies (``pytest``, ``pytest-cov``), by default
+        ``None`` (i.e. prompt the user unless ``--with-defaults`` is used, in which case
+        it defaults to ``True``).
+    with_defaults : bool, optional
+        Whether to trust the defaults and skip all prompts.
+    """
+    # Get the project name
+    if project_name is None:
+        project_name = get_project_name(with_defaults)
+
+    # Setting defaults
+    if with_defaults:
+        if actions is not None:
+            logger.warning("Ignoring actions argument because of --with-defaults.")
+        actions = True
+        if deps is not None:
+            logger.warning("Ignoring deps argument because of --with-defaults.")
+        deps = True
+
+    # Check if uv is available and uv.lock exists
+    has_uv = Path("uv.lock").exists()
+
+    # Install test dependencies
+    if deps is None:
+        deps = logger.confirm("Would you like to install test dependencies?")
+    if deps:
+        test_deps = ["pytest", "pytest-cov"]
+        if has_uv:
+            installed = run_command(["uv", "add", "--dev"] + test_deps)
+            if installed is False:
+                logger.abort("Failed to install test dependencies.")
+            logger.info("Test dependencies installed with uv.")
+        else:
+            installed = run_command(["pip", "install"] + test_deps)
+            if installed is False:
+                logger.abort("Failed to install test dependencies.")
+            logger.info("Test dependencies installed with pip.")
+
+    # Write the tests infrastructure
+    write_tests_infra(project_name)
+    logger.info("Tests infra written.")
+
+    # Optionally set up GitHub Actions
+    if actions is None:
+        actions = logger.confirm("Would you like to initialize GitHub Actions?")
+    if actions:
+        write_test_actions_config()
+        logger.info("Test actions config written.")
+
+    logger.success("Testing infrastructure set up successfully.")
 
 
 @project_app.command(name="tree")
