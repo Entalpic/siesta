@@ -11,6 +11,7 @@ from siesta.utils.self import (
     PACKAGE_NAME,
     compare_versions,
     get_installation_method,
+    get_installation_source,
     get_latest_version,
     get_update_command,
 )
@@ -74,35 +75,126 @@ class TestGetInstallationMethod:
             assert get_installation_method() == "pip"
 
 
+class TestGetInstallationSource:
+    """Tests for get_installation_source()."""
+
+    def test_detects_github_source(self):
+        """Test detection of GitHub (git) installation source."""
+        mock_dist = MagicMock()
+        mock_dist.read_text.return_value = (
+            '{"url": "git+ssh://git@github.com/entalpic/siesta.git", '
+            '"vcs_info": {"vcs": "git", "commit_id": "abc123"}}'
+        )
+
+        with patch("siesta.utils.self.metadata.distribution", return_value=mock_dist):
+            assert get_installation_source() == "github"
+
+    def test_detects_pypi_source_no_direct_url(self):
+        """Test detection of PyPI source when no direct_url.json exists."""
+        mock_dist = MagicMock()
+        mock_dist.read_text.side_effect = FileNotFoundError
+
+        with patch("siesta.utils.self.metadata.distribution", return_value=mock_dist):
+            assert get_installation_source() == "pypi"
+
+    def test_detects_pypi_source_no_vcs_info(self):
+        """Test detection of PyPI source when direct_url has no vcs_info."""
+        mock_dist = MagicMock()
+        mock_dist.read_text.return_value = (
+            '{"url": "https://files.pythonhosted.org/..."}'
+        )
+
+        with patch("siesta.utils.self.metadata.distribution", return_value=mock_dist):
+            assert get_installation_source() == "pypi"
+
+    def test_detects_pypi_source_editable(self):
+        """Test that editable installs are treated as pypi source."""
+        mock_dist = MagicMock()
+        mock_dist.read_text.return_value = '{"dir_info": {"editable": true}}'
+
+        with patch("siesta.utils.self.metadata.distribution", return_value=mock_dist):
+            assert get_installation_source() == "pypi"
+
+
 class TestGetLatestVersion:
     """Tests for get_latest_version()."""
 
-    def test_returns_version_on_success(self):
-        """Test successful version fetch from PyPI."""
+    def test_returns_version_from_pypi(self):
+        """Test successful version fetch from PyPI when source is pypi."""
         mock_response = MagicMock()
         mock_response.read.return_value = b'{"info": {"version": "2.0.0"}}'
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
         with patch("siesta.utils.self.urlopen", return_value=mock_response):
-            assert get_latest_version() == "2.0.0"
+            assert get_latest_version(source="pypi") == "2.0.0"
 
-    def test_returns_none_on_network_error(self):
-        """Test None is returned on network failure."""
+    def test_returns_version_from_github_release(self):
+        """Test successful version fetch from GitHub releases."""
+        mock_release = MagicMock()
+        mock_release.tag_name = "v2.0.0"
+
+        mock_repo = MagicMock()
+        mock_repo.get_latest_release.return_value = mock_release
+
+        mock_github = MagicMock()
+        mock_github.get_repo.return_value = mock_repo
+
+        with patch("siesta.utils.self.Github", return_value=mock_github):
+            assert get_latest_version(source="github") == "2.0.0"
+
+    def test_returns_version_from_github_tags_fallback(self):
+        """Test fallback to GitHub tags when no releases exist."""
+        from github import GithubException
+
+        mock_tag = MagicMock()
+        mock_tag.name = "v1.5.0"
+
+        mock_tags = MagicMock()
+        mock_tags.totalCount = 1
+        mock_tags.__getitem__ = MagicMock(return_value=mock_tag)
+
+        mock_repo = MagicMock()
+        mock_repo.get_latest_release.side_effect = GithubException(
+            404, "Not Found", None
+        )
+        mock_repo.get_tags.return_value = mock_tags
+
+        mock_github = MagicMock()
+        mock_github.get_repo.return_value = mock_repo
+
+        with patch("siesta.utils.self.Github", return_value=mock_github):
+            assert get_latest_version(source="github") == "1.5.0"
+
+    def test_returns_none_on_pypi_network_error(self):
+        """Test None is returned on PyPI network failure."""
         from urllib.error import URLError
 
         with patch("siesta.utils.self.urlopen", side_effect=URLError("Network error")):
-            assert get_latest_version() is None
+            assert get_latest_version(source="pypi") is None
 
-    def test_returns_none_on_json_error(self):
-        """Test None is returned on invalid JSON response."""
+    def test_returns_none_on_pypi_json_error(self):
+        """Test None is returned on invalid JSON response from PyPI."""
         mock_response = MagicMock()
         mock_response.read.return_value = b"not valid json"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
         with patch("siesta.utils.self.urlopen", return_value=mock_response):
-            assert get_latest_version() is None
+            assert get_latest_version(source="pypi") is None
+
+    def test_auto_detects_source(self):
+        """Test that source is auto-detected when not specified."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"info": {"version": "3.0.0"}}'
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("siesta.utils.self.get_installation_source", return_value="pypi"),
+            patch("siesta.utils.self.urlopen", return_value=mock_response),
+        ):
+            assert get_latest_version() == "3.0.0"
 
 
 class TestCompareVersions:

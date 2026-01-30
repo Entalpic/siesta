@@ -156,16 +156,19 @@ def main():
     """Run the CLI, gracefully handling ``KeyboardInterrupt``."""
     # Start background update check (non-blocking)
     update_future = start_background_update_check(metadata.version("siesta"))
+    interrupted = False
 
     try:
         app()
     except KeyboardInterrupt:
+        interrupted = True
         logger.abort("\nAborted.", exit=1)
     finally:
         # Show update message at the end (if available)
-        update_msg = get_update_message(update_future)
-        if update_msg:
-            logger.print(update_msg)
+        if not interrupted:
+            update_msg = get_update_message(update_future)
+            if update_msg:
+                logger.print(update_msg)
 
 
 @app.command(name="set-github-pat")
