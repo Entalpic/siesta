@@ -105,7 +105,7 @@ def get_installation_method() -> str:
                 direct_url = json.loads(direct_url_text)
                 if direct_url.get("dir_info", {}).get("editable", False):
                     return "editable"
-        except FileNotFoundError:
+        except (FileNotFoundError, json.JSONDecodeError):
             pass
     except metadata.PackageNotFoundError:
         pass
@@ -139,7 +139,7 @@ def get_installation_source() -> str:
                 vcs_info = direct_url.get("vcs_info", {})
                 if vcs_info.get("vcs") == "git":
                     return "github"
-        except FileNotFoundError:
+        except (FileNotFoundError, json.JSONDecodeError):
             pass
     except metadata.PackageNotFoundError:
         pass
