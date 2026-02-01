@@ -243,7 +243,7 @@ def make_empty_folders(dest: Path):
     (dest / "source/_templates").mkdir(parents=True, exist_ok=True)
 
 
-def discover_packages(dest: Path, with_defaults: str) -> str:
+def discover_packages(dest: Path, interactive: bool = False) -> str:
     """Discover packages in the current directory.
 
     Directories will be returned relatively to the conf.py file in the documentation
@@ -253,8 +253,8 @@ def discover_packages(dest: Path, with_defaults: str) -> str:
     ----------
     dest : Path
         The path to the documentation folder
-    with_defaults : bool
-        Whether to trust the defaults and skip all prompts.
+    interactive : bool, optional
+        Whether to prompt the user. Defaults to ``False`` (use defaults).
 
     Returns
     -------
@@ -267,7 +267,7 @@ def discover_packages(dest: Path, with_defaults: str) -> str:
     packages = [
         p for p in Path(start).iterdir() if p.is_dir() and (p / "__init__.py").exists()
     ]
-    if not packages and not with_defaults:
+    if not packages and interactive:
         user_packages = logger.prompt(
             "No packages found. Enter relative package paths separated by commas"
         )
@@ -284,15 +284,15 @@ def discover_packages(dest: Path, with_defaults: str) -> str:
     return json.dumps([str(p) for p in packages])
 
 
-def get_repo_url(with_defaults: bool) -> str:
+def get_repo_url(interactive: bool = False) -> str:
     """Get the repository URL from the user.
 
     Prompts the user for the repository URL.
 
     Parameters
     ----------
-    with_defaults : bool
-        Whether to trust the defaults and skip all prompts.
+    interactive : bool, optional
+        Whether to prompt the user. Defaults to ``False`` (use defaults).
 
     Returns
     -------
@@ -308,35 +308,38 @@ def get_repo_url(with_defaults: bool) -> str:
         )
         html_url = "https://github.com/" + ssh_url.split(":")[-1].replace(".git", "")
         url = (
-            html_url
-            if with_defaults
-            else logger.prompt("Repository URL", default=html_url)
+            logger.prompt("Repository URL", default=html_url)
+            if interactive
+            else html_url
         )
     except Exception:
-        url = url if with_defaults else logger.prompt("Repository URL", default=url)
+        url = logger.prompt("Repository URL", default=url) if interactive else url
     finally:
         return url
 
 
-def overwrite_docs_files(dest: Path, with_defaults: bool, project_name: str = None):
+def overwrite_docs_files(
+    dest: Path, interactive: bool = False, project_name: str = None
+):
     """Overwrite the conf.py file with the project name.
 
     Parameters
     ----------
     dest : Path
         The path to the ``conf.py`` file.
-    with_defaults : bool
-        Whether to trust the defaults and skip all prompts.
+    interactive : bool, optional
+        Whether to prompt the user. Defaults to ``False`` (use defaults).
     project_name : str, optional
-        The project's name. If not provided, it will be prompted (or discovered if ``with_defaults`` is ``True``).
+        The project's name. If not provided, it will be prompted (in interactive mode)
+        or discovered from ``pyproject.toml``.
     """
     dest = resolve_path(dest)
     # get the packages to list in autoapi_dirs
-    packages = discover_packages(dest, with_defaults)
+    packages = discover_packages(dest, interactive)
     # get project name from $CWD or user prompt
-    project = project_name or get_project_name(with_defaults)
+    project = project_name or get_project_name(interactive)
     # get repo URL from git or user prompt
-    url = get_repo_url(with_defaults)
+    url = get_repo_url(interactive)
 
     # setup conf.py based on project name and packages
     conf_py = dest / "source/conf.py"
