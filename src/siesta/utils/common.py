@@ -1,7 +1,6 @@
 # Copyright 2025 Entalpic
 """Generalist utility functions."""
 
-import importlib
 import json
 import re
 from os.path import expandvars
@@ -12,11 +11,10 @@ from subprocess import CalledProcessError, run
 from ruamel.yaml import YAML
 
 from siesta.logger import Logger
+from siesta.utils.config import ROOT
 
 logger = Logger("siesta")
 """A logger to log messages to the console."""
-ROOT = importlib.resources.files("siesta")
-"""The root directory of the ``siesta`` package."""
 
 
 def safe_dump(data, file, **kwargs):

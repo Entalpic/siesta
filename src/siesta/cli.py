@@ -63,6 +63,7 @@ from siesta.utils.common import (
     run_command,
     write_or_update_pre_commit_file,
 )
+from siesta.utils.config import CLI_DEFAULTS
 from siesta.utils.docs import (
     AutoBuildDocs,
     copy_boilerplate,
@@ -324,9 +325,9 @@ def init_docs(
     # Setting defaults: only fill in values that weren't explicitly provided
     if not interactive:
         if deps is None:
-            deps = True
+            deps = CLI_DEFAULTS["deps"]
         if as_main_deps is None:
-            as_main_deps = False
+            as_main_deps = CLI_DEFAULTS["as_main_deps"]
 
     # Where the docs will be stored, typically `$CWD/docs`
     path = resolve_path(path)
@@ -703,21 +704,21 @@ def quickstart_project(
     # Setting defaults: only fill in values that weren't explicitly provided
     if not interactive:
         if precommit is None:
-            precommit = True
+            precommit = CLI_DEFAULTS["precommit"]
         if docs is None:
-            docs = True
+            docs = CLI_DEFAULTS["docs"]
         if deps is None:
-            deps = True
+            deps = CLI_DEFAULTS["deps"]
         if as_main_deps is None:
-            as_main_deps = False
+            as_main_deps = CLI_DEFAULTS["as_main_deps"]
         if ipdb is None:
-            ipdb = True
+            ipdb = CLI_DEFAULTS["ipdb"]
         if tests is None:
-            tests = True
+            tests = CLI_DEFAULTS["tests"]
         if actions is None:
-            actions = True
+            actions = CLI_DEFAULTS["actions"]
         if gitignore is None:
-            gitignore = True
+            gitignore = CLI_DEFAULTS["gitignore"]
 
     # Check if the project is already initialized
     has_uv_lock = Path("uv.lock").exists()
@@ -884,9 +885,9 @@ def setup_tests(
     # Setting defaults: only fill in values that weren't explicitly provided
     if not interactive:
         if actions is None:
-            actions = True
+            actions = CLI_DEFAULTS["actions"]
         if deps is None:
-            deps = True
+            deps = CLI_DEFAULTS["deps"]
 
     # Check if uv is available and uv.lock exists
     has_uv = Path("uv.lock").exists()

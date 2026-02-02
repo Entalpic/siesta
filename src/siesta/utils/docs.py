@@ -12,7 +12,6 @@ from tempfile import TemporaryDirectory
 from watchdog.events import FileSystemEvent, RegexMatchingEventHandler
 
 from siesta.utils.common import (
-    ROOT,
     get_project_name,
     get_pyver,
     load_deps,
@@ -21,6 +20,7 @@ from siesta.utils.common import (
     run_command,
     safe_dump,
 )
+from siesta.utils.config import ROOT
 from siesta.utils.github import fetch_github_files
 
 
