@@ -27,7 +27,7 @@ def module_test_path_no_docs(tmp_path_factory):
     current_dir = Path.cwd()
     try:
         os.chdir(tmp_path)  # Change to temp directory
-        app(["project", "quickstart", "--with-defaults", "--local", "--overwrite"])
+        app(["project", "quickstart", "--local", "--overwrite"])
         shutil.rmtree(tmp_path / "docs")
     finally:
         os.chdir(current_dir)  # Always restore original directory

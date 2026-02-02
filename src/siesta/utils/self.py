@@ -35,6 +35,14 @@ from packaging.version import Version
 from platformdirs import user_cache_dir
 
 from siesta.utils.common import logger, run_command
+from siesta.utils.config import (
+    DEFAULT_UPDATE_CHECK_HOURS,
+    GITHUB_OWNER,
+    GITHUB_REPO,
+    PACKAGE_NAME,
+    PYPI_URL,
+    UPDATE_CHECK_ENV_VAR,
+)
 from siesta.utils.github import get_user_pat
 
 if TYPE_CHECKING:
@@ -44,19 +52,6 @@ if TYPE_CHECKING:
         last_check: float
         latest_version: str | None
 
-
-# Package name for PyPI
-PACKAGE_NAME = "siesta"
-PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
-
-# GitHub repo info
-GITHUB_OWNER = "entalpic"
-GITHUB_REPO = "siesta"
-
-# Environment variable for update check frequency (in hours)
-# Set to "false", "False", or "-1" to disable
-UPDATE_CHECK_ENV_VAR = "SIESTA_UPDATE_CHECK_HOURS"
-DEFAULT_UPDATE_CHECK_HOURS = 24
 
 # Cache file location (uses platform-appropriate directory)
 # - macOS: ~/Library/Caches/siesta

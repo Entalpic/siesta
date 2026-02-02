@@ -14,25 +14,31 @@ Use `siesta` to initialize
     siesta project quickstart --local
     ```
 
-2. Add documentation to an existing project
+2. Add testing infrastructure (pytest) to an _existing_ project
+
+    ```bash
+    siesta project setup-tests
+    ```
+
+3. Add documentation to an _existing_ project
 
     ```bash
     siesta docs init --local
     ```
 
-3. Build the docs locally
+4. Build the docs locally
 
     ```bash
     siesta docs build
     ```
 
-4. Watch for changes and auto-rebuild the docs
+5. Watch for changes and auto-rebuild the docs
 
     ```bash
     siesta docs watch
     ```
 
-5. Check for updates and upgrade siesta
+6. Check for updates and upgrade siesta
 
     ```bash
     siesta self version
@@ -82,6 +88,6 @@ That's it 🤓
 
 This is still very WIP. In particular, next steps:
 
-- Update Contribution Guide
-- Add ReadTheDocs deployment instructions
-- More tests
+-   Update Contribution Guide
+-   Add ReadTheDocs deployment instructions
+-   More tests
