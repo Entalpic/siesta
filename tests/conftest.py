@@ -38,8 +38,8 @@ def capture_output():
         .. code-block:: python
 
             with capture_output() as output:
-                app(["show-deps"])
-            assert "numpy" in output.getvalue()
+                app(["self", "show-deps"])
+            assert "pytest" in output.getvalue()
 
         Returns
         -------

@@ -26,9 +26,8 @@ Learn how to use with:
     $ siesta self # shows help
     $ siesta self version
     $ siesta self update  # or: siesta self upgrade
-
-    $ siesta set-github-pat
-    $ siesta show-deps
+    $ siesta self set-github-pat
+    $ siesta self show-deps
 
 You can also refer to the :ref:`siesta-cli-tutorial` for more information.
 
@@ -142,7 +141,9 @@ self_app = App(
     name="self",
     help=dedent(
         """
-        Manage siesta itself: check version, update to the latest release.
+        Manage siesta itself and configure settings.
+
+        Includes version checking, updates, GitHub PAT configuration, and dependency info.
 
         """.strip(),
     ),
@@ -173,7 +174,7 @@ def main():
                 logger.print(update_msg)
 
 
-@app.command(name="set-github-pat")
+@self_app.command(name="set-github-pat")
 def set_github_pat(pat: Optional[str] = ""):
     """
     Store a GitHub Personal Access Token (PAT) in your keyring.
@@ -206,7 +207,7 @@ def set_github_pat(pat: Optional[str] = ""):
     assert isinstance(pat, str), "PAT must be a string."
 
     logger.warning(
-        "Run [r]$ siesta set-github-pat --help[/r]"
+        "Run [r]$ siesta self set-github-pat --help[/r]"
         + " if you're not sure how to generate a PAT."
     )
     if not pat:
@@ -218,7 +219,7 @@ def set_github_pat(pat: Optional[str] = ""):
     logger.success("GitHub PAT set. You can now use `siesta docs init`.")
 
 
-@app.command(name="show-deps")
+@self_app.command(name="show-deps")
 def show_deps(as_pip: bool = False):
     """Show the recommended dependencies for the documentation that would be installed with `siesta docs init`.
 
@@ -255,7 +256,7 @@ def init_docs(
 
     - Initializes a new Sphinx project at the specified path.
 
-    - Optionally installs recommended dependencies (run `siesta show-deps` to see
+    - Optionally installs recommended dependencies (run ``siesta self show-deps`` to see
       them).
 
     - Uses the split source / build folder structure.
@@ -319,7 +320,9 @@ def init_docs(
             "You need to set a GitHub Personal Access Token"
             + " to fetch the latest static files."
         )
-        logger.warning("Run [r]$ siesta set-github-pat --help[/r] to learn how to.")
+        logger.warning(
+            "Run [r]$ siesta self set-github-pat --help[/r] to learn how to."
+        )
         logger.abort("Aborting.", exit=1)
 
     # Setting defaults: only fill in values that weren't explicitly provided
@@ -414,9 +417,9 @@ def update(
 
     .. important::
 
-        ``$ siesta update`` requires a GitHub Personal Access Token (PAT) to fetch
+        ``$ siesta docs update`` requires a GitHub Personal Access Token (PAT) to fetch
         the latest version of the documentation's static files etc. from the repository.
-        Run ``$ siesta set-github-pat`` to do so.
+        Run ``$ siesta self set-github-pat`` to do so.
 
     .. note::
 
