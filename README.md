@@ -88,6 +88,8 @@ That's it 🤓
 
 This is still very WIP. In particular, next steps:
 
--   Update Contribution Guide
--   Add ReadTheDocs deployment instructions
--   More tests
+- Update Contribution Guide
+- Add ReadTheDocs deployment instructions
+- More tests
+
+Dummy commit
