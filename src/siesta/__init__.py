@@ -28,7 +28,7 @@ TL;DR
     $ siesta project quickstart --local
 
     # With most up to date remote files (requires GitHub PAT)
-    $ siesta set-github-pat
+    $ siesta self set-github-pat
     $ siesta project quickstart
 
 **Add documentation to an existing project:**
@@ -104,21 +104,16 @@ to access the files.
 
 .. code-block:: bash
 
-    $ siesta set-github-pat
+    $ siesta self set-github-pat
     $ siesta docs init --uv --with-defaults
 
 Going further
 =============
 
-Currently ``siesta`` has 5 main entry points with subcommands:
+Currently ``siesta`` has 3 main subcommands:
 
-**Top-level commands:**
-- ``set-github-pat`` to set your Github Personal Access Token (PAT) to access remote
-  files.
-- ``show-deps`` to show the dependencies that will be added to your project to make
-  docs.
+**``docs`` subcommands:**
 
-** ``docs`` subcommands:**
 - ``docs init`` to create a docs folder and get started with your current project's
   documentation.
 - ``docs build`` to build the HTML documentation locally (equivalent to running
@@ -126,15 +121,23 @@ Currently ``siesta`` has 5 main entry points with subcommands:
 - ``docs update`` to update the documentation boilerplate files in your project from Github. Typically updating the brand assets and colors.
 - ``docs watch`` to automatically build the docs when source files are changed.
 
-** ``project`` subcommands:**
+**``project`` subcommands:**
+
 - ``project quickstart`` to create a new Python project with ``uv`` and set up
   documentation as per ``docs init``.
+- ``project setup-tests`` to add pytest testing infrastructure to an existing project.
+- ``project tree`` to display the project's directory structure.
 
-** ``self`` subcommands:**
+**``self`` subcommands:**
+
 - ``self version`` to show the current siesta version and check for updates.
 - ``self update`` (or ``self upgrade``) to update siesta to the latest version.
   Automatically detects how siesta was installed (uv tool, pipx, pip) and uses the
   appropriate update command.
+- ``self set-github-pat`` to set your Github Personal Access Token (PAT) to access remote
+  files.
+- ``self show-deps`` to show the dependencies that will be added to your project to make
+  docs.
 
 .. note::
 
@@ -149,7 +152,7 @@ Currently ``siesta`` has 5 main entry points with subcommands:
 .. note::
 
     ``docs init`` and ``docs update`` require a Github Personal Access Token (PAT) to
-    access remote files. You can set it with ``$ siesta set-github-pat``. Alternatively,
+    access remote files. You can set it with ``$ siesta self set-github-pat``. Alternatively,
     you can use the ``--local`` flag to use local files instead of fetching from Github.
     Note that it may therefore not use the most up-to-date files to render the docs.
 

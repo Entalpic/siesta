@@ -27,8 +27,13 @@ It includes both the code's *docstrings* and the *manual documentation files* li
 
     .. code-block:: bash
 
+        # Start a new project from scratch
         siesta project quickstart
-        # or
+
+        # Add testing infrastructure to an existing project
+        siesta project setup-tests
+
+        # Add documentation to an existing project
         siesta docs init
 
     See :ref:`siesta-cli-tutorial` for more information.

@@ -183,7 +183,7 @@ def label_tree(
         The labeled tree lines.
     """
 
-    TREE_LABELS[f"src/{get_project_name(True, True)}/"] = (
+    TREE_LABELS[f"src/{get_project_name(interactive=False, snake_case=True)}/"] = (
         "Your (first?) package should live in here."
     )
 

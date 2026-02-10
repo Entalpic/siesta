@@ -1,7 +1,6 @@
 # Copyright 2025 Entalpic
 """Generalist utility functions."""
 
-import importlib
 import json
 import re
 from os.path import expandvars
@@ -12,11 +11,10 @@ from subprocess import CalledProcessError, run
 from ruamel.yaml import YAML
 
 from siesta.logger import Logger
+from siesta.utils.config import ROOT
 
 logger = Logger("siesta")
 """A logger to log messages to the console."""
-ROOT = importlib.resources.files("siesta")
-"""The root directory of the ``siesta`` package."""
 
 
 def safe_dump(data, file, **kwargs):
@@ -180,7 +178,7 @@ def get_pyver():
     return "3.12"
 
 
-def get_project_name(with_defaults: bool, snake_case: bool = False) -> str:
+def get_project_name(interactive: bool = False, snake_case: bool = False) -> str:
     """Get the current project's name from the pyproject.toml or user.
 
     Prompts the user for the project name, with the default being the name in the pyproject.toml
@@ -188,8 +186,8 @@ def get_project_name(with_defaults: bool, snake_case: bool = False) -> str:
 
     Parameters
     ----------
-    with_defaults : bool
-        Whether to trust the defaults and skip all prompts.
+    interactive : bool, optional
+        Whether to prompt the user. Defaults to ``False`` (use defaults).
     snake_case : bool, optional
         Whether to convert the project name to snake case, by default ``False``.
 
@@ -204,7 +202,7 @@ def get_project_name(with_defaults: bool, snake_case: bool = False) -> str:
         txt = pyproject_toml.read_text()
         pyproject_name = re.search(r"name\s*=\s*['\"](.*)['\"]", txt).group(1)
     default = pyproject_name or resolve_path(".").name
-    name = default if with_defaults else logger.prompt("Project name", default=default)
+    name = logger.prompt("Project name", default=default) if interactive else default
     if snake_case:
         name = name.lower().replace(" ", "_").replace("-", "_")
     return name

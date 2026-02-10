@@ -20,14 +20,14 @@ Learn how to use with:
 
     $ siesta project # shows help
     $ siesta project quickstart
+    $ siesta project setup-tests
     $ siesta project tree
 
     $ siesta self # shows help
     $ siesta self version
     $ siesta self update  # or: siesta self upgrade
-
-    $ siesta set-github-pat
-    $ siesta show-deps
+    $ siesta self set-github-pat
+    $ siesta self show-deps
 
 You can also refer to the :ref:`siesta-cli-tutorial` for more information.
 
@@ -48,9 +48,9 @@ from importlib import metadata
 from pathlib import Path
 from shutil import get_terminal_size, rmtree
 from textwrap import dedent
-from typing import Optional
+from typing import Annotated, Optional
 
-from cyclopts import App
+from cyclopts import App, Parameter
 from gitignore_parser import parse_gitignore
 from watchdog.observers import Observer
 
@@ -62,6 +62,7 @@ from siesta.utils.common import (
     run_command,
     write_or_update_pre_commit_file,
 )
+from siesta.utils.config import CLI_DEFAULTS
 from siesta.utils.docs import (
     AutoBuildDocs,
     copy_boilerplate,
@@ -125,7 +126,7 @@ project_app = App(
     name="project",
     help=dedent(
         """
-        Initialize a Python project with standard Entalpic config.
+        Initialize and manage Python projects with standard Entalpic config.
 
         Upgrade with ``$ siesta self update``.
 
@@ -140,7 +141,9 @@ self_app = App(
     name="self",
     help=dedent(
         """
-        Manage siesta itself: check version, update to the latest release.
+        Manage siesta itself and configure settings.
+
+        Includes version checking, updates, GitHub PAT configuration, and dependency info.
 
         """.strip(),
     ),
@@ -171,7 +174,7 @@ def main():
                 logger.print(update_msg)
 
 
-@app.command(name="set-github-pat")
+@self_app.command(name="set-github-pat")
 def set_github_pat(pat: Optional[str] = ""):
     """
     Store a GitHub Personal Access Token (PAT) in your keyring.
@@ -204,7 +207,7 @@ def set_github_pat(pat: Optional[str] = ""):
     assert isinstance(pat, str), "PAT must be a string."
 
     logger.warning(
-        "Run [r]$ siesta set-github-pat --help[/r]"
+        "Run [r]$ siesta self set-github-pat --help[/r]"
         + " if you're not sure how to generate a PAT."
     )
     if not pat:
@@ -216,7 +219,7 @@ def set_github_pat(pat: Optional[str] = ""):
     logger.success("GitHub PAT set. You can now use `siesta docs init`.")
 
 
-@app.command(name="show-deps")
+@self_app.command(name="show-deps")
 def show_deps(as_pip: bool = False):
     """Show the recommended dependencies for the documentation that would be installed with `siesta docs init`.
 
@@ -241,7 +244,7 @@ def init_docs(
     overwrite: bool = False,
     deps: bool = None,
     uv: bool = None,
-    with_defaults: bool = True,
+    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
     branch: str = "main",
     contents: str = "src/siesta/boilerplate",
     local: bool = False,
@@ -253,7 +256,7 @@ def init_docs(
 
     - Initializes a new Sphinx project at the specified path.
 
-    - Optionally installs recommended dependencies (run `siesta show-deps` to see
+    - Optionally installs recommended dependencies (run ``siesta self show-deps`` to see
       them).
 
     - Uses the split source / build folder structure.
@@ -286,8 +289,9 @@ def init_docs(
         Prevent dependencies prompt by forcing its value to ``True`` or ``False``.
     uv : bool, optional
         Prevent uv prompt by forcing its value to ``True`` or ``False``.
-    with_defaults: bool, optional
-        Whether to trust the defaults and skip all prompts.
+    interactive : bool, optional
+        Enable interactive mode with prompts for all options (``-i``). By default,
+        sensible defaults are used. User-specified flags always take precedence.
     branch : str, optional
         The branch to fetch the static files from.
     contents : str, optional
@@ -316,21 +320,17 @@ def init_docs(
             "You need to set a GitHub Personal Access Token"
             + " to fetch the latest static files."
         )
-        logger.warning("Run [r]$ siesta set-github-pat --help[/r] to learn how to.")
+        logger.warning(
+            "Run [r]$ siesta self set-github-pat --help[/r] to learn how to."
+        )
         logger.abort("Aborting.", exit=1)
 
-    # Setting defaults
-    if with_defaults:
-        if deps is not None:
-            logger.warning(
-                "Ignoring deps argument because you are using --with-defaults."
-            )
-        deps = True
-        if as_main_deps is not None:
-            logger.warning(
-                "Ignoring as_main_deps argument because you are using --with-defaults."
-            )
-        as_main_deps = False
+    # Setting defaults: only fill in values that weren't explicitly provided
+    if not interactive:
+        if deps is None:
+            deps = CLI_DEFAULTS["deps"]
+        if as_main_deps is None:
+            as_main_deps = CLI_DEFAULTS["as_main_deps"]
 
     # Where the docs will be stored, typically `$CWD/docs`
     path = resolve_path(path)
@@ -351,16 +351,16 @@ def init_docs(
     logger.success("Docs initialized 📄")
 
     # Whether to install dependencies
-    should_install = deps is not None or logger.confirm(
-        "Would you like to install recommended dependencies?"
-    )
+    if deps is None:
+        deps = logger.confirm("Would you like to install recommended dependencies?")
+
     with_uv = False
-    if should_install:
+    if deps:
         # Check if uv.lock exists in order to decide whether to use uv or not
         if resolve_path("./uv.lock").exists():
             with_uv = (
                 uv
-                or with_defaults  # if using defaults, assume uv since uv.lock exists
+                or not interactive  # if not interactive, assume uv since uv.lock exists
                 or logger.confirm(
                     "It looks like you are using uv. Use `uv add` to add dependencies?"
                 )
@@ -384,7 +384,7 @@ def init_docs(
     # Make empty dirs (_build and _static) in target directory
     make_empty_folders(path)
     # Update defaults from user config
-    overwrite_docs_files(path, with_defaults, project_name)
+    overwrite_docs_files(path, interactive, project_name)
 
     # Check if the ReadTheDocs YAML config exists
     has_rtd = Path(".readthedocs.yaml").exists()
@@ -417,9 +417,9 @@ def update(
 
     .. important::
 
-        ``$ siesta update`` requires a GitHub Personal Access Token (PAT) to fetch
+        ``$ siesta docs update`` requires a GitHub Personal Access Token (PAT) to fetch
         the latest version of the documentation's static files etc. from the repository.
-        Run ``$ siesta set-github-pat`` to do so.
+        Run ``$ siesta self set-github-pat`` to do so.
 
     .. note::
 
@@ -599,7 +599,7 @@ def quickstart_project(
     docs_path: str = "./docs",
     as_main_deps: bool | None = None,
     overwrite: bool = False,
-    with_defaults: bool = True,
+    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
     branch: str = "main",
     contents: str = "src/siesta/boilerplate",
     local: bool = False,
@@ -614,9 +614,16 @@ def quickstart_project(
 
     * Initializes a new ``uv`` project with ``$ uv init``.
     * Installs recommended dependencies with ``$ uv add --dev [...]``.
+    * Sets up pytest testing infrastructure (via ``siesta project setup-tests``).
+    * Sets up GitHub Actions for CI.
     * Initializes a new Sphinx project at the specified path as per ``$ siesta
       docs init``.
     * Initializes pre-commit hooks with ``$ uv run pre-commit install``.
+
+    .. tip::
+
+        If you only need to add testing infrastructure to an existing project,
+        use ``siesta project setup-tests`` instead.
 
     .. note::
 
@@ -627,15 +634,21 @@ def quickstart_project(
 
     .. important::
 
-        Using ``--with-defaults`` will trust the defaults and skip all prompts:
+        By default, sensible defaults are used for unspecified options:
 
         - Install recommended dependencies.
         - Initialize pre-commit hooks.
+        - Initialize pytest testing infrastructure and GitHub Actions.
         - Initialize the docs.
+
+        User-specified flags always take precedence. For example,
+        ``--no-tests`` will skip test initialization.
+
+        Use ``-i`` or ``--interactive`` to be prompted for each option instead.
 
     .. important::
 
-        If you generate the docs, (with ``--docs`` or ``--with-defaults``) parameters
+        If you generate the docs (with ``--docs`` or by default) parameters
         like ``--deps`` and ``--as_main_deps`` will passed to the ``siesta docs init``
         command so it may be worth checking ``$ siesta docs init --help``.
 
@@ -659,8 +672,9 @@ def quickstart_project(
     overwrite : bool, optional
         Whether to overwrite existing files (if any). Will be passed to ``siesta
         docs init``.
-    with_defaults : bool, optional
-        Whether to trust the defaults and skip all prompts.
+    interactive : bool, optional
+        Enable interactive mode with prompts for all options (``-i``). By default,
+        sensible defaults are used. User-specified flags always take precedence.
     branch : str, optional
         The branch to fetch the static files from.
     contents : str, optional
@@ -688,34 +702,26 @@ def quickstart_project(
         )
 
     # Get the project name
-    project_name = get_project_name(with_defaults)
+    project_name = get_project_name(interactive)
 
-    # Setting defaults
-    if with_defaults:
-        if precommit is not None:
-            logger.warning("Ignoring precommit argument because of --with-defaults.")
-        precommit = True
-        if docs is not None:
-            logger.warning("Ignoring docs argument because of --with-defaults.")
-        docs = True
-        if deps is not None:
-            logger.warning("Ignoring deps argument because of --with-defaults.")
-        deps = True
-        if as_main_deps is not None:
-            logger.warning("Ignoring as_main_deps argument because of --with-defaults.")
-        as_main_deps = False
-        if ipdb is not None:
-            logger.warning("Ignoring ipdb argument because of --with-defaults.")
-        ipdb = True
-        if tests is not None:
-            logger.warning("Ignoring tests argument because of --with-defaults.")
-        tests = True
-        if actions is not None:
-            logger.warning("Ignoring actions argument because of --with-defaults.")
-        actions = True
-        if gitignore is not None:
-            logger.warning("Ignoring gitignore argument because of --with-defaults.")
-        gitignore = True
+    # Setting defaults: only fill in values that weren't explicitly provided
+    if not interactive:
+        if precommit is None:
+            precommit = CLI_DEFAULTS["precommit"]
+        if docs is None:
+            docs = CLI_DEFAULTS["docs"]
+        if deps is None:
+            deps = CLI_DEFAULTS["deps"]
+        if as_main_deps is None:
+            as_main_deps = CLI_DEFAULTS["as_main_deps"]
+        if ipdb is None:
+            ipdb = CLI_DEFAULTS["ipdb"]
+        if tests is None:
+            tests = CLI_DEFAULTS["tests"]
+        if actions is None:
+            actions = CLI_DEFAULTS["actions"]
+        if gitignore is None:
+            gitignore = CLI_DEFAULTS["gitignore"]
 
     # Check if the project is already initialized
     has_uv_lock = Path("uv.lock").exists()
@@ -769,13 +775,29 @@ def quickstart_project(
     if tests is None:
         tests = logger.confirm("Would you like to initialize (pytest) tests infra?")
     if tests:
-        write_tests_infra(project_name)
-        logger.info("Tests infra written.")
-    if actions is None:
-        actions = logger.confirm("Would you like to initialize GitHub Actions?")
-    if actions:
-        write_test_actions_config()
-        logger.info("Test actions config written.")
+        # Use setup_tests but skip deps (already installed above) and set interactive=True
+        # since we already processed defaults above
+        setup_tests(
+            project_name=project_name,
+            actions=actions,
+            deps=False,  # deps already handled by quickstart
+            interactive=True,  # we already processed defaults above
+        )
+    else:
+        # Handle GitHub Actions independently when tests are skipped
+        # (setup_tests normally handles this, but we're not calling it)
+        if actions is None:
+            actions = logger.confirm("Would you like to initialize GitHub Actions?")
+        if actions:
+            # Warn if user wants CI but has no tests
+            if not Path("tests").exists():
+                logger.warning(
+                    "You're setting up GitHub Actions CI without tests. "
+                    "Either add tests later or update [r].github/workflows/test.yml[/r] "
+                    "to match your project's needs."
+                )
+            write_test_actions_config()
+            logger.info("Test actions config written.")
     if gitignore is None:
         gitignore = logger.confirm(
             "Would you like to initialize the ``.gitignore`` file?"
@@ -792,7 +814,7 @@ def quickstart_project(
             as_main_deps=as_main_deps,
             overwrite=overwrite,
             deps=deps,
-            with_defaults=with_defaults,
+            interactive=interactive,
             branch=branch,
             contents=contents,
             local=local,
@@ -801,6 +823,106 @@ def quickstart_project(
     tree_project(".")
     logger.info("Project initialized.")
     logger.success("🔥 Happy coding! 👋")
+
+
+@project_app.command(name="setup-tests")
+def setup_tests(
+    project_name: str | None = None,
+    actions: bool | None = None,
+    deps: bool | None = None,
+    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
+):
+    """Set up pytest testing infrastructure for an existing project.
+
+    This command adds testing infrastructure to an existing Python project:
+
+    - Installs ``pytest`` and ``pytest-cov`` as dev dependencies.
+    - Creates a ``tests/`` directory with an example test file.
+    - Optionally sets up GitHub Actions for CI (runs tests on PRs and pushes to main).
+
+    .. tip::
+
+        This is useful when you have an existing project that doesn't have tests yet,
+        or when you want to add Entalpic's standard testing setup to a project.
+
+    .. note::
+
+        This command assumes a ``uv``-based project (``uv.lock`` exists).
+        If ``uv.lock`` is not found, dependencies will be installed with ``pip``.
+
+    Example
+    -------
+    .. code-block:: bash
+
+        # Set up tests with all defaults (installs deps + GitHub Actions)
+        $ siesta project setup-tests
+
+        # Set up tests interactively (prompts for each option)
+        $ siesta project setup-tests -i
+
+        # Set up tests without GitHub Actions (user flag takes precedence)
+        $ siesta project setup-tests --no-actions
+
+        # Set up tests for a specific project name
+        $ siesta project setup-tests --project-name=myproject
+
+    Parameters
+    ----------
+    project_name : str, optional
+        The project's name. If not provided, it will be detected from ``pyproject.toml``
+        or prompted.
+    actions : bool, optional
+        Whether to initialize GitHub Actions, by default ``None`` (i.e. prompt the user
+        in interactive mode, defaults to ``True`` otherwise).
+    deps : bool, optional
+        Whether to install test dependencies (``pytest``, ``pytest-cov``), by default
+        ``None`` (i.e. prompt the user in interactive mode, defaults to ``True`` otherwise).
+    interactive : bool, optional
+        Enable interactive mode with prompts for all options (``-i``). By default,
+        sensible defaults are used. User-specified flags always take precedence.
+    """
+    # Get the project name
+    if project_name is None:
+        project_name = get_project_name(interactive)
+
+    # Setting defaults: only fill in values that weren't explicitly provided
+    if not interactive:
+        if actions is None:
+            actions = CLI_DEFAULTS["actions"]
+        if deps is None:
+            deps = CLI_DEFAULTS["deps"]
+
+    # Check if uv is available and uv.lock exists
+    has_uv = Path("uv.lock").exists()
+
+    # Install test dependencies
+    if deps is None:
+        deps = logger.confirm("Would you like to install test dependencies?")
+    if deps:
+        test_deps = ["pytest", "pytest-cov"]
+        if has_uv:
+            installed = run_command(["uv", "add", "--dev"] + test_deps)
+            if installed is False:
+                logger.abort("Failed to install test dependencies.")
+            logger.info("Test dependencies installed with uv.")
+        else:
+            installed = run_command(["pip", "install"] + test_deps)
+            if installed is False:
+                logger.abort("Failed to install test dependencies.")
+            logger.info("Test dependencies installed with pip.")
+
+    # Write the tests infrastructure
+    write_tests_infra(project_name)
+    logger.info("Tests infra written.")
+
+    # Optionally set up GitHub Actions
+    if actions is None:
+        actions = logger.confirm("Would you like to initialize GitHub Actions?")
+    if actions:
+        write_test_actions_config()
+        logger.info("Test actions config written.")
+
+    logger.success("Testing infrastructure set up successfully.")
 
 
 @project_app.command(name="tree")

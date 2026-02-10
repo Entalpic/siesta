@@ -38,8 +38,8 @@ def capture_output():
         .. code-block:: python
 
             with capture_output() as output:
-                app(["show-deps"])
-            assert "numpy" in output.getvalue()
+                app(["self", "show-deps"])
+            assert "pytest" in output.getvalue()
 
         Returns
         -------
@@ -85,7 +85,7 @@ def module_test_path(tmp_path_factory):
     current_dir = Path.cwd()
     try:
         os.chdir(tmp_path)  # Change to temp directory
-        app(["project", "quickstart", "--with-defaults", "--local", "--overwrite"])
+        app(["project", "quickstart", "--local", "--overwrite"])
     finally:
         os.chdir(current_dir)  # Always restore original directory
     return tmp_path

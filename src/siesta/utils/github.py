@@ -112,7 +112,7 @@ def fetch_github_files(
     pat = get_user_pat()
     if not pat:
         logger.abort(
-            "GitHub Personal Access Token (PAT) not found. Run 'siesta set-github-pat' to set it.",
+            "GitHub Personal Access Token (PAT) not found. Run 'siesta self set-github-pat' to set it.",
             exit=1,
         )
     auth = Token(pat)

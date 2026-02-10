@@ -4,10 +4,10 @@ from siesta.utils.common import load_deps
 
 
 def test_show_deps(capture_output):
-    """Test the show-deps command outputs the expected dependencies."""
+    """Test the self show-deps command outputs the expected dependencies."""
     with capture_output() as output:
         try:
-            app(["show-deps"])
+            app(["self", "show-deps"])
         except SystemExit as e:
             assert e.code == 0
 
