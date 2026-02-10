@@ -27,6 +27,7 @@ CLI_DEFAULTS = {
     "deps": True,
     "as_main_deps": False,
     "precommit": True,
+    "docs": True,
     "ipdb": True,
     "tests": True,
     "actions": True,
@@ -37,6 +38,7 @@ CLI_DEFAULTS = {
 - ``deps``: Whether to install dependencies (dev &? docs), by default ``True``.
 - ``as_main_deps``: Whether to include docs dependencies in the main dependencies, by default ``False``.
 - ``precommit``: Whether to install pre-commit hooks, by default ``True``.
+- ``docs``: Whether to initialize documentation (via ``siesta docs init``), by default ``True``.
 - ``ipdb``: Whether to add ipdb as debugger, by default ``True``.
 - ``tests``: Whether to initialize (pytest) tests infra, by default ``True``.
 - ``actions``: Whether to initialize GitHub Actions, by default ``True``.
