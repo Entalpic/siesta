@@ -179,8 +179,10 @@ def set_github_pat(pat: Optional[str] = ""):
     """
     Store a GitHub Personal Access Token (PAT) in your keyring.
 
-    A Github PAT is required to fetch the latest version of the documentation's static
-    files etc. from the repository.
+    A Github PAT is only required when using the ``--remote-assets`` flag with commands
+    like ``siesta docs init``, ``siesta docs update``, or ``siesta project quickstart``
+    to fetch the latest boilerplate files from the remote repository. By default, local
+    bundled files are used and no PAT is needed.
 
     `About GitHub PAT <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#about-personal-access-tokens>`_
 
@@ -216,7 +218,9 @@ def set_github_pat(pat: Optional[str] = ""):
         f"Are you sure you want to set the GitHub PAT to {pat[:5]}...{pat[-5:]}?"
     )
     set_password("siesta", "github_pat", pat)
-    logger.success("GitHub PAT set. You can now use `siesta docs init`.")
+    logger.success(
+        "GitHub PAT set. You can now use ``--remote-assets`` to fetch remote files."
+    )
 
 
 @self_app.command(name="show-deps")
@@ -247,7 +251,7 @@ def init_docs(
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
     branch: str = "main",
     contents: str = "src/siesta/boilerplate",
-    local: bool = False,
+    remote_assets: bool = False,
     project_name: str = None,
 ):
     """Initialize a Sphinx documentation project with Entalpic's standard configuration (also called within ``siesta project quickstart``).
@@ -296,9 +300,10 @@ def init_docs(
         The branch to fetch the static files from.
     contents : str, optional
         The path to the static files in the repository.
-    local : bool, optional
-        Use local boilerplate docs assets instead of fetching from the repository.
-        May update to outdated contents so avoid using this option.
+    remote_assets : bool, optional
+        Fetch boilerplate docs assets from the remote GitHub repository instead of
+        using the local bundled files. Requires a GitHub Personal Access Token (PAT).
+        Run ``$ siesta self set-github-pat`` to configure one.
     project_name : str, optional
         The project's name. If not provided, it will be prompted.
     Raises
@@ -313,17 +318,18 @@ def init_docs(
             exit=1,
         )
 
-    # Check for GitHub Personal Access Token
-    pat = get_user_pat()
-    if not pat and not local:
-        logger.warning(
-            "You need to set a GitHub Personal Access Token"
-            + " to fetch the latest static files."
-        )
-        logger.warning(
-            "Run [r]$ siesta self set-github-pat --help[/r] to learn how to."
-        )
-        logger.abort("Aborting.", exit=1)
+    # Check for GitHub Personal Access Token (only needed for remote assets)
+    if remote_assets:
+        pat = get_user_pat()
+        if not pat:
+            logger.warning(
+                "You need to set a GitHub Personal Access Token"
+                + " to fetch the latest static files."
+            )
+            logger.warning(
+                "Run [r]$ siesta self set-github-pat --help[/r] to learn how to."
+            )
+            logger.abort("Aborting.", exit=1)
 
     # Setting defaults: only fill in values that weren't explicitly provided
     if not interactive:
@@ -379,7 +385,11 @@ def init_docs(
 
     # Download and copy siesta pre-filled folder structure to the target directory
     copy_boilerplate(
-        path, branch=branch, content_path=contents, overwrite=True, local=local
+        path,
+        branch=branch,
+        content_path=contents,
+        overwrite=True,
+        local=not remote_assets,
     )
     # Make empty dirs (_build and _static) in target directory
     make_empty_folders(path)
@@ -407,19 +417,14 @@ def update(
     path: str = "./docs",
     branch: str = "main",
     contents: str = "src/siesta/boilerplate",
-    local: bool = False,
+    remote_assets: bool = False,
 ):
     """
     Update the static files in the docs folder like CSS, JS and images.
 
-    Basically will download the remote repository's static files into a local temporary
-    folder, then will copy them in your docs ``source/_static`` folder.
-
-    .. important::
-
-        ``$ siesta docs update`` requires a GitHub Personal Access Token (PAT) to fetch
-        the latest version of the documentation's static files etc. from the repository.
-        Run ``$ siesta self set-github-pat`` to do so.
+    By default, uses the local bundled boilerplate files. Use ``--remote-assets`` to
+    fetch the latest version from the remote GitHub repository (requires a GitHub PAT;
+    run ``$ siesta self set-github-pat`` to configure one).
 
     .. note::
 
@@ -434,9 +439,10 @@ def update(
         The branch to fetch the static files from.
     contents : str, optional
         The path to the static files in the repository.
-    local : bool, optional
-        Use local boilerplate docs assets instead of fetching from the repository.
-        May update to outdated contents so avoid using this option.
+    remote_assets : bool, optional
+        Fetch boilerplate docs assets from the remote GitHub repository instead of
+        using the local bundled files. Requires a GitHub Personal Access Token (PAT).
+        Run ``$ siesta self set-github-pat`` to configure one.
     """
     # Check if the path exists
     path = resolve_path(path)
@@ -454,13 +460,13 @@ def update(
             content_path=contents,
             overwrite=False,
             include_files_regex="_static",
-            local=local,
+            local=not remote_assets,
         )
         logger.success("Static files updated.")
 
     # Update the conf.py file
     if logger.confirm("Would you like to update the conf.py file?"):
-        update_conf_py(path, branch=branch)
+        update_conf_py(path, branch=branch, local=not remote_assets)
         logger.success("[r]conf.py[/r] updated.")
 
     # Update the pre-commit hooks
@@ -602,7 +608,7 @@ def quickstart_project(
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
     branch: str = "main",
     contents: str = "src/siesta/boilerplate",
-    local: bool = False,
+    remote_assets: bool = False,
     ipdb: bool | None = None,
     tests: bool | None = None,
     actions: bool | None = None,
@@ -679,9 +685,10 @@ def quickstart_project(
         The branch to fetch the static files from.
     contents : str, optional
         The path to the static files in the repository.
-    local : bool, optional
-        Use local boilerplate docs assets instead of fetching from the repository.
-        May update to outdated contents so avoid using this option.
+    remote_assets : bool, optional
+        Fetch boilerplate docs assets from the remote GitHub repository instead of
+        using the local bundled files. Requires a GitHub Personal Access Token (PAT).
+        Run ``$ siesta self set-github-pat`` to configure one.
     ipdb: bool, optional
         Whether to add ipdb as debugger, by default ``None`` (i.e. prompt the user).
     tests: bool, optional
@@ -817,7 +824,7 @@ def quickstart_project(
             interactive=interactive,
             branch=branch,
             contents=contents,
-            local=local,
+            remote_assets=remote_assets,
         )
 
     tree_project(".")

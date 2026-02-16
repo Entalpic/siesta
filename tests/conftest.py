@@ -85,7 +85,7 @@ def module_test_path(tmp_path_factory):
     current_dir = Path.cwd()
     try:
         os.chdir(tmp_path)  # Change to temp directory
-        app(["project", "quickstart", "--local", "--overwrite"])
+        app(["project", "quickstart", "--overwrite"])
     finally:
         os.chdir(current_dir)  # Always restore original directory
     return tmp_path
