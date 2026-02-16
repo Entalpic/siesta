@@ -8,7 +8,7 @@ def test_quickstart_project(tmp_path_chdir, capture_output):
     """Test project quickstart command creates expected project structure."""
 
     with capture_output() as output:
-        app(["project", "quickstart", "--local"])
+        app(["project", "quickstart"])
 
     assert "Failed to build the docs" not in output.getvalue()
 
@@ -31,7 +31,7 @@ def test_quickstart_project_as_app(tmp_path_chdir, capture_output):
     """Test project quickstart --as-app creates app structure instead of library."""
 
     with capture_output() as output:
-        app(["project", "quickstart", "--as-app", "--local"])
+        app(["project", "quickstart", "--as-app"])
 
     assert "Failed to build the docs" not in output.getvalue()
     # Should not have src directory for app
@@ -44,7 +44,7 @@ def test_quickstart_project_as_pkg(tmp_path_chdir, capture_output):
     """Test project quickstart --as-pkg creates package structure in root directory."""
 
     with capture_output() as output:
-        app(["project", "quickstart", "--as-pkg", "--local"])
+        app(["project", "quickstart", "--as-pkg"])
 
     assert "Failed to build the docs" not in output.getvalue()
     assert (tmp_path_chdir / "src").exists()
@@ -56,7 +56,7 @@ def test_quickstart_respects_no_tests(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         # User specifies --no-tests, defaults should not override it
-        app(["project", "quickstart", "--no-tests", "--local"])
+        app(["project", "quickstart", "--no-tests"])
 
     output_text = output.getvalue()
     assert "Failed to build the docs" not in output_text
@@ -81,7 +81,7 @@ def test_quickstart_respects_no_actions(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         # User specifies --no-actions, defaults should not override it
-        app(["project", "quickstart", "--no-actions", "--local"])
+        app(["project", "quickstart", "--no-actions"])
 
     assert "Failed to build the docs" not in output.getvalue()
 
@@ -104,7 +104,6 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
                 "quickstart",
                 "--no-tests",
                 "--no-actions",
-                "--local",
             ]
         )
 

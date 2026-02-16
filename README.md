@@ -11,7 +11,7 @@ Use `siesta` to initialize
 1. Start a new Python project from scratch
 
     ```bash
-    siesta project quickstart --local
+    siesta project quickstart
     ```
 
 2. Add testing infrastructure (pytest) to an _existing_ project
@@ -23,7 +23,7 @@ Use `siesta` to initialize
 3. Add documentation to an _existing_ project
 
     ```bash
-    siesta docs init --local
+    siesta docs init
     ```
 
 4. Build the docs locally

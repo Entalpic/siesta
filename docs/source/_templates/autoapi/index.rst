@@ -25,9 +25,9 @@ TL;DR
 .. code-block:: bash
 
    # 1️⃣ Start new project
-   $ siesta project quickstart --local
+   $ siesta project quickstart
    # 1️⃣ Initialize docs in existing project
-   $ siesta docs init --local
+   $ siesta docs init
 
    # 2️⃣ Build docs
    $ siesta docs build

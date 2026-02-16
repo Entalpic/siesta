@@ -24,12 +24,12 @@ TL;DR
 
 .. code-block:: bash
 
-    # With local files (no GitHub PAT needed)
-    $ siesta project quickstart --local
+    # Uses local bundled files (no GitHub PAT needed)
+    $ siesta project quickstart
 
     # With most up to date remote files (requires GitHub PAT)
     $ siesta self set-github-pat
-    $ siesta project quickstart
+    $ siesta project quickstart --remote-assets
 
 **Add documentation to an existing project:**
 
@@ -97,15 +97,18 @@ the ``docs`` command with the ``init`` subcommand.
     $ siesta docs init --help
     $ siesta docs init --with-defaults
 
-This creates a ``docs/`` folder in your project and installing the necessary
-dependencies. Some of the contents of the ``docs/`` folder are copied from the Entalpic
-Github repository and therefore requires you to set a Github Personal Access Token (PAT)
-to access the files.
+This creates a ``docs/`` folder in your project and installs the necessary
+dependencies. By default, the bundled local boilerplate files are used. To fetch the
+most up-to-date files from the Entalpic Github repository, use the ``--remote-assets``
+flag (requires a Github Personal Access Token).
 
 .. code-block:: bash
 
-    $ siesta self set-github-pat
     $ siesta docs init --uv --with-defaults
+
+    # Or, to fetch the latest remote files:
+    $ siesta self set-github-pat
+    $ siesta docs init --uv --with-defaults --remote-assets
 
 Going further
 =============
@@ -151,10 +154,10 @@ Currently ``siesta`` has 3 main subcommands:
 
 .. note::
 
-    ``docs init`` and ``docs update`` require a Github Personal Access Token (PAT) to
-    access remote files. You can set it with ``$ siesta self set-github-pat``. Alternatively,
-    you can use the ``--local`` flag to use local files instead of fetching from Github.
-    Note that it may therefore not use the most up-to-date files to render the docs.
+    By default, ``docs init`` and ``docs update`` use locally bundled boilerplate files
+    and do not require a Github Personal Access Token (PAT). Use ``--remote-assets`` to
+    fetch the latest files from Github (requires a PAT, set it with
+    ``$ siesta self set-github-pat``).
 
 When running ``$ siesta docs init`` the following happens:
 

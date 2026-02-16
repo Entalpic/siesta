@@ -78,9 +78,12 @@ def copy_boilerplate(
     branch: str = "main",
     content_path: str = "src/siesta/boilerplate",
     include_files_regex: str = ".*",
-    local: bool = False,
+    local: bool = True,
 ):
     """Copy the target files to the specified path.
+
+    By default, uses the local bundled boilerplate files. Set ``local=False`` to
+    fetch from the remote GitHub repository instead.
 
     You can specify specific files to include using a regex pattern,
     used (approximately) as follows:
@@ -102,6 +105,9 @@ def copy_boilerplate(
         The directory or file to fetch from the repository
     include_files_regex: str
         A regex pattern to include only files that match the pattern with :func:`re.findall`.
+    local : bool, optional
+        Use the local bundled boilerplate files. Defaults to ``True``. Set to ``False``
+        to fetch from the remote GitHub repository (requires a GitHub PAT).
     """
     with TemporaryDirectory() as tmpdir:
         if local:
@@ -157,7 +163,7 @@ def write_rtd_config() -> None:
     safe_dump(config, rtd)
 
 
-def update_conf_py(dest: Path, branch: str = "main"):
+def update_conf_py(dest: Path, branch: str = "main", local: bool = True):
     """Update the ``conf.py`` file with the latest content from the boilerplate.
 
     Parameters
@@ -166,14 +172,23 @@ def update_conf_py(dest: Path, branch: str = "main"):
         The path to the ``conf.py`` file.
     branch : str, optional
         Which remote branch to get ``conf.py`` from, by default ``"main"``
+    local : bool, optional
+        Use the local bundled ``conf.py`` instead of fetching from the repository.
+        Defaults to ``True``.
     """
     with TemporaryDirectory() as tmpdir:
-        fetch_github_files(
-            branch=branch,
-            content_path="src/siesta/boilerplate/source/conf.py",
-            dir=tmpdir,
-        )
-        tmpdir = Path(tmpdir)
+        if local:
+            # Copy the local bundled conf.py to the tmpdir
+            local_conf = ROOT / "boilerplate" / "source" / "conf.py"
+            tmpdir = Path(tmpdir)
+            copy2(local_conf, tmpdir / "conf.py")
+        else:
+            fetch_github_files(
+                branch=branch,
+                content_path="src/siesta/boilerplate/source/conf.py",
+                dir=tmpdir,
+            )
+            tmpdir = Path(tmpdir)
         src = tmpdir / "conf.py"
         dest = resolve_path(dest / "source/conf.py")
         assert dest.exists(), f"Destination file (conf.py) not found: {dest}"
