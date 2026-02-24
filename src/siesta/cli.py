@@ -27,6 +27,7 @@ Learn how to use with:
     $ siesta self version
     $ siesta self update  # or: siesta self upgrade
     $ siesta self set-github-pat
+    $ siesta self show-github-pat
     $ siesta self show-deps
 
 You can also refer to the :ref:`siesta-cli-tutorial` for more information.
@@ -221,6 +222,36 @@ def set_github_pat(pat: Optional[str] = ""):
     logger.success(
         "GitHub PAT set. You can now use ``--remote-assets`` to fetch remote files."
     )
+
+
+@self_app.command(name="show-github-pat")
+def show_github_pat(full: bool = False):
+    """
+    Display the stored GitHub Personal Access Token (PAT).
+
+    By default, shows a masked version of the token (first 14 and last 4 characters)
+    for identification without exposing the full secret.
+
+    Parameters
+    ----------
+    full : bool, optional
+        Show the full token in plaintext instead of the masked version.
+    """
+    pat = get_user_pat()
+    if not pat:
+        logger.warning(
+            "No GitHub PAT found."
+            + " Run [r]$ siesta self set-github-pat[/r] to set one."
+        )
+        return
+
+    if full:
+        logger.warning("The full token will be displayed in plaintext.")
+        logger.info(f"GitHub PAT: {pat}")
+    else:
+        masked = f"{pat[:14]}...{pat[-4:]}"
+        logger.info(f"GitHub PAT: {masked}")
+        logger.info("Use [r]--full[/r] to display the entire token.")
 
 
 @self_app.command(name="show-deps")
