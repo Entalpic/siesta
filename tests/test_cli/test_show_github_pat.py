@@ -28,7 +28,10 @@ def test_show_github_pat_full(capture_output):
 
 def test_show_github_pat_none(capture_output):
     """Test that show-github-pat warns when no PAT is stored."""
-    with patch("siesta.utils.github.get_user_pat", return_value=None):
+    with (
+        patch("siesta.utils.github.get_user_pat", return_value=None),
+        patch("siesta.cli.get_user_pat", return_value=None),
+    ):
         with capture_output() as output:
             app(["self", "show-github-pat"])
 
