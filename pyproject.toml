@@ -19,8 +19,8 @@ dependencies = [
 [project.scripts]
 siesta = "siesta.cli:main"
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "ipdb>=0.13.13",
     "ipython>=8.28.0",
     "matplotlib>=3.10.6",
