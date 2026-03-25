@@ -10,6 +10,7 @@ from siesta.cli import app
 from siesta.utils.self import (
     PACKAGE_NAME,
     compare_versions,
+    format_github_access_error,
     get_installation_method,
     get_installation_source,
     get_latest_version,
@@ -127,7 +128,7 @@ class TestGetLatestVersion:
         mock_response.__exit__ = MagicMock(return_value=False)
 
         with patch("siesta.utils.self.urlopen", return_value=mock_response):
-            assert get_latest_version(source="pypi") == "2.0.0"
+            assert get_latest_version(source="pypi") == ("2.0.0", None)
 
     def test_returns_version_from_github_release(self):
         """Test successful version fetch from GitHub releases."""
@@ -141,7 +142,7 @@ class TestGetLatestVersion:
         mock_github.get_repo.return_value = mock_repo
 
         with patch("siesta.utils.self.Github", return_value=mock_github):
-            assert get_latest_version(source="github") == "2.0.0"
+            assert get_latest_version(source="github") == ("2.0.0", None)
 
     def test_returns_version_from_github_tags_fallback(self):
         """Test fallback to GitHub tags when no releases exist."""
@@ -164,14 +165,17 @@ class TestGetLatestVersion:
         mock_github.get_repo.return_value = mock_repo
 
         with patch("siesta.utils.self.Github", return_value=mock_github):
-            assert get_latest_version(source="github") == "1.5.0"
+            assert get_latest_version(source="github") == ("1.5.0", None)
 
     def test_returns_none_on_pypi_network_error(self):
         """Test None is returned on PyPI network failure."""
         from urllib.error import URLError
 
         with patch("siesta.utils.self.urlopen", side_effect=URLError("Network error")):
-            assert get_latest_version(source="pypi") is None
+            assert get_latest_version(source="pypi") == (
+                None,
+                "<urlopen error Network error>",
+            )
 
     def test_returns_none_on_pypi_json_error(self):
         """Test None is returned on invalid JSON response from PyPI."""
@@ -181,7 +185,9 @@ class TestGetLatestVersion:
         mock_response.__exit__ = MagicMock(return_value=False)
 
         with patch("siesta.utils.self.urlopen", return_value=mock_response):
-            assert get_latest_version(source="pypi") is None
+            ver, err = get_latest_version(source="pypi")
+            assert ver is None
+            assert err is not None
 
     def test_auto_detects_source(self):
         """Test that source is auto-detected when not specified."""
@@ -194,7 +200,29 @@ class TestGetLatestVersion:
             patch("siesta.utils.self.get_installation_source", return_value="pypi"),
             patch("siesta.utils.self.urlopen", return_value=mock_response),
         ):
-            assert get_latest_version() == "3.0.0"
+            assert get_latest_version() == ("3.0.0", None)
+
+
+class TestFormatGithubAccessError:
+    """Tests for format_github_access_error()."""
+
+    def test_bad_credentials_message(self):
+        """BadCredentialsException maps to PAT guidance."""
+        from github import BadCredentialsException
+
+        msg = format_github_access_error(
+            BadCredentialsException(401, {"message": "Bad credentials"})
+        )
+        assert "token" in msg.lower()
+        assert "set-github-pat" in msg
+
+    def test_github_exception_includes_status(self):
+        """Generic GithubException includes HTTP status and API message."""
+        from github import GithubException
+
+        msg = format_github_access_error(GithubException(404, {"message": "Not Found"}))
+        assert "404" in msg
+        assert "Not Found" in msg
 
 
 class TestCompareVersions:
@@ -254,11 +282,26 @@ class TestGetUpdateCommand:
 class TestSelfVersionCommand:
     """Tests for 'siesta self version' command."""
 
-    def test_version_command_shows_version(self, capture_output):
-        """Test that version command shows current version."""
+    def _mock_commit_info(self):
+        from datetime import datetime, timezone
+
+        return {
+            "hash": "abc1234",
+            "author": "Test User",
+            "time": datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc),
+        }
+
+    def test_version_command_shows_all_versions(self, capture_output):
+        """Test that version command shows pip, release, and commit info."""
         with (
-            patch("siesta.cli.get_latest_version", return_value=__version__),
-            patch("siesta.cli.get_installation_method", return_value="pip"),
+            patch(
+                "siesta.cli.get_latest_github_release_version",
+                return_value=(__version__, None),
+            ),
+            patch(
+                "siesta.cli.get_latest_commit_info",
+                return_value=(self._mock_commit_info(), None),
+            ),
             capture_output() as output,
         ):
             try:
@@ -268,12 +311,20 @@ class TestSelfVersionCommand:
 
         output_str = output.getvalue()
         assert __version__ in output_str
+        assert "abc1234" in output_str
+        assert "Test User" in output_str
 
     def test_version_command_shows_update_available(self, capture_output):
         """Test that version command shows when update is available."""
         with (
-            patch("siesta.cli.get_latest_version", return_value="99.0.0"),
-            patch("siesta.cli.get_installation_method", return_value="pip"),
+            patch(
+                "siesta.cli.get_latest_github_release_version",
+                return_value=("99.0.0", None),
+            ),
+            patch(
+                "siesta.cli.get_latest_commit_info",
+                return_value=(self._mock_commit_info(), None),
+            ),
             capture_output() as output,
         ):
             try:
@@ -283,6 +334,29 @@ class TestSelfVersionCommand:
 
         output_str = output.getvalue()
         assert "newer version" in output_str.lower() or "99.0.0" in output_str
+
+    def test_version_command_handles_network_errors(self, capture_output):
+        """Test that version command surfaces fetch failure details."""
+        with (
+            patch(
+                "siesta.cli.get_latest_github_release_version",
+                return_value=(None, "GitHub API 401: Bad credentials"),
+            ),
+            patch(
+                "siesta.cli.get_latest_commit_info",
+                return_value=(None, "GitHub API 401: Bad credentials"),
+            ),
+            capture_output() as output,
+        ):
+            try:
+                app(["self", "version"])
+            except SystemExit:
+                pass
+
+        output_str = output.getvalue()
+        assert __version__ in output_str
+        assert "could not fetch" in output_str.lower()
+        assert "401" in output_str
 
 
 class TestSelfUpdateCommand:
@@ -306,7 +380,7 @@ class TestSelfUpdateCommand:
         """Test update command when already on latest version."""
         with (
             patch("siesta.cli.get_installation_method", return_value="pip"),
-            patch("siesta.cli.get_latest_version", return_value=__version__),
+            patch("siesta.cli.get_latest_version", return_value=(__version__, None)),
             capture_output() as output,
         ):
             try:
@@ -321,7 +395,7 @@ class TestSelfUpdateCommand:
         """Test that 'upgrade' is an alias for 'update'."""
         with (
             patch("siesta.cli.get_installation_method", return_value="pip"),
-            patch("siesta.cli.get_latest_version", return_value=__version__),
+            patch("siesta.cli.get_latest_version", return_value=(__version__, None)),
             capture_output() as output,
         ):
             try:

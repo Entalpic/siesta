@@ -29,7 +29,12 @@ from typing import TYPE_CHECKING
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from github import Github, GithubException
+from github import (
+    BadCredentialsException,
+    Github,
+    GithubException,
+    RateLimitExceededException,
+)
 from github.Auth import Token
 from packaging.version import Version
 from platformdirs import user_cache_dir
@@ -46,11 +51,17 @@ from siesta.utils.config import (
 from siesta.utils.github import get_user_pat
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from typing import TypedDict
 
     class CacheData(TypedDict):
         last_check: float
         latest_version: str | None
+
+    class CommitInfo(TypedDict):
+        hash: str
+        author: str
+        time: datetime
 
 
 # Cache file location (uses platform-appropriate directory)
@@ -142,7 +153,34 @@ def get_installation_source() -> str:
     return "pypi"
 
 
-def _get_latest_version_github(timeout: float = 5.0) -> str | None:
+def format_github_access_error(exc: BaseException) -> str:
+    """Summarize a PyGithub or transport error for user-facing messages.
+
+    Parameters
+    ----------
+    exc : BaseException
+        The exception raised when calling the GitHub API.
+
+    Returns
+    -------
+    str
+        A short, human-readable description.
+    """
+    if isinstance(exc, BadCredentialsException):
+        return (
+            "GitHub rejected the token (invalid or expired). "
+            "Run `siesta self set-github-pat` with a valid PAT."
+        )
+    if isinstance(exc, RateLimitExceededException):
+        return "GitHub API rate limit exceeded. Try again later or set a PAT."
+    if isinstance(exc, GithubException):
+        data = exc.data if isinstance(exc.data, dict) else {}
+        msg = data.get("message") or str(exc)
+        return f"GitHub API {exc.status}: {msg}"
+    return str(exc) or type(exc).__name__
+
+
+def _get_latest_version_github(timeout: float = 5.0) -> tuple[str | None, str | None]:
     """Query GitHub for the latest siesta version.
 
     First tries without authentication (public repo), then falls back to
@@ -156,8 +194,9 @@ def _get_latest_version_github(timeout: float = 5.0) -> str | None:
 
     Returns
     -------
-    str | None
-        The latest version string, or ``None`` if the query failed.
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, ``(None, None)`` if no release/tag was found,
+        or ``(None, err)`` on failure.
     """
 
     def try_get_version(g: Github) -> str | None:
@@ -188,17 +227,21 @@ def _get_latest_version_github(timeout: float = 5.0) -> str | None:
 
         return None
 
+    unauth_forbidden: GithubException | None = None
+
     # Try unauthenticated first (public repo)
     try:
         g = Github(timeout=int(timeout))
         result = try_get_version(g)
         if result:
-            return result
+            return (result, None)
     except GithubException as e:
         # 403 often means rate limited, will try with auth
-        if e.status != 403:
+        if e.status == 403:
+            unauth_forbidden = e
+        else:
             logger.warning(f"Failed to fetch latest version from GitHub: {e}")
-            return None
+            return (None, format_github_access_error(e))
 
     # Fall back to PAT authentication (for rate limiting)
     pat = get_user_pat()
@@ -207,14 +250,94 @@ def _get_latest_version_github(timeout: float = 5.0) -> str | None:
             g = Github(auth=Token(pat), timeout=int(timeout))
             result = try_get_version(g)
             if result:
-                return result
+                return (result, None)
         except GithubException as e:
             logger.warning(f"Failed to fetch latest version from GitHub: {e}")
+            return (None, format_github_access_error(e))
+    elif unauth_forbidden is not None:
+        return (None, format_github_access_error(unauth_forbidden))
 
-    return None
+    return (None, None)
 
 
-def _get_latest_version_pypi(timeout: float = 5.0) -> str | None:
+def _get_github_client(timeout: float = 5.0) -> Github:
+    """Get a GitHub client, trying unauthenticated first then falling back to PAT.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for GitHub API requests in seconds, by default 5.0.
+
+    Returns
+    -------
+    Github
+        A PyGithub client instance.
+    """
+    pat = get_user_pat()
+    if pat:
+        return Github(auth=Token(pat), timeout=int(timeout))
+    return Github(timeout=int(timeout))
+
+
+def get_latest_github_release_version(
+    timeout: float = 5.0,
+) -> tuple[str | None, str | None]:
+    """Get the latest release version from GitHub.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for the HTTP request in seconds, by default 5.0.
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, ``(None, None)`` if no release or tag was found,
+        or ``(None, error_message)`` if the query failed.
+    """
+    return _get_latest_version_github(timeout=timeout)
+
+
+def get_latest_commit_info(
+    timeout: float = 5.0, branch: str = "main"
+) -> tuple[CommitInfo | None, str | None]:
+    """Get info about the latest commit on a branch from GitHub.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for the HTTP request in seconds, by default 5.0.
+    branch : str, optional
+        The branch to get the latest commit from, by default ``"main"``.
+
+    Returns
+    -------
+    tuple[CommitInfo | None, str | None]
+        ``(info, None)`` on success, ``(None, None)`` if the branch has no commits,
+        or ``(None, error_message)`` if the query failed.
+    """
+    try:
+        g = _get_github_client(timeout=timeout)
+        repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
+        commits = repo.get_commits(sha=branch)
+        commit = commits[0]
+        return (
+            {
+                "hash": commit.sha[:7],
+                "author": commit.commit.author.name,
+                "time": commit.commit.author.date,
+            },
+            None,
+        )
+    except GithubException as e:
+        return (None, format_github_access_error(e))
+    except IndexError:
+        return (None, None)
+    except Exception as e:
+        return (None, format_github_access_error(e))
+
+
+def _get_latest_version_pypi(timeout: float = 5.0) -> tuple[str | None, str | None]:
     """Query PyPI for the latest siesta version.
 
     Parameters
@@ -224,19 +347,22 @@ def _get_latest_version_pypi(timeout: float = 5.0) -> str | None:
 
     Returns
     -------
-    str | None
-        The latest version string, or ``None`` if the query failed.
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, or ``(None, error_message)`` on failure.
     """
     try:
         with urlopen(PYPI_URL, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
-            return data.get("info", {}).get("version")
+            ver = data.get("info", {}).get("version")
+            return (ver, None)
     except (URLError, json.JSONDecodeError, TimeoutError) as e:
         logger.warning(f"Failed to fetch latest version from PyPI: {e}")
-        return None
+        return (None, str(e))
 
 
-def get_latest_version(timeout: float = 5.0, source: str | None = None) -> str | None:
+def get_latest_version(
+    timeout: float = 5.0, source: str | None = None
+) -> tuple[str | None, str | None]:
     """Query the appropriate source for the latest siesta version.
 
     The source is determined by how siesta was installed:
@@ -254,8 +380,8 @@ def get_latest_version(timeout: float = 5.0, source: str | None = None) -> str |
 
     Returns
     -------
-    str | None
-        The latest version string, or ``None`` if the query failed.
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, or ``(None, error_message)`` on failure.
     """
     if source is None:
         source = get_installation_source()
@@ -484,7 +610,7 @@ def _check_for_updates_sync(current_version: str) -> tuple[str, str] | None:
         A tuple of (current_version, latest_version) if an update is available,
         or ``None`` if up to date or check failed.
     """
-    latest = get_latest_version(timeout=3.0)
+    latest, _err = get_latest_version(timeout=3.0)
     _write_cache(latest)
 
     if latest is None:

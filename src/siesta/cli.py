@@ -84,6 +84,8 @@ from siesta.utils.project import (
 from siesta.utils.self import (
     compare_versions,
     get_installation_method,
+    get_latest_commit_info,
+    get_latest_github_release_version,
     get_latest_version,
     get_update_command,
     get_update_message,
@@ -1007,40 +1009,43 @@ def tree_project(path: str = ".", ignore_from_gitignore: bool = True):
 def self_version():
     """Show the current siesta version and check for updates.
 
-    Displays the installed version, installation method, and whether
-    a newer version is available on PyPI.
+    Displays the installed pip version, latest GitHub release,
+    and latest commit on main.
     """
     from siesta import __version__
 
-    # Get installation method
-    method = get_installation_method()
-    method_display = {
-        "uv": "uv tool",
-        "pipx": "pipx",
-        "pip": "pip",
-        "editable": "editable (development)",
-    }.get(method, method)
+    logger.info(f"Installed (pip): [r]{__version__}[/r]")
 
-    logger.info(f"siesta version: [r]{__version__}[/r]")
-    logger.info(f"Installation method: [r]{method_display}[/r]")
+    with logger.loading("Fetching latest versions from GitHub..."):
+        release_version, release_err = get_latest_github_release_version()
+        commit_info, commit_err = get_latest_commit_info()
 
-    # Check for updates
-    with logger.loading("Checking for updates..."):
-        latest = get_latest_version()
-
-    if latest is None:
-        logger.warning("Could not check for updates (network error).")
-        return
-
-    comparison = compare_versions(__version__, latest)
-    if comparison < 0:
-        logger.warning(f"A newer version is available: [r]{latest}[/r]")
-        logger.info("Run [r]siesta self update[/r] to upgrade.")
-    elif comparison > 0:
-        logger.info("You are running a pre-release or development version.")
-        logger.info(f"Latest stable release: [r]{latest}[/r]")
+    if release_version is not None:
+        logger.info(f"GitHub release:  [r]{release_version}[/r]")
     else:
-        logger.success("You are running the latest version.")
+        _detail = f" ({release_err})" if release_err else ""
+        logger.warning(f"GitHub release:  could not fetch{_detail}")
+
+    if commit_info is not None:
+        time_str = commit_info["time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+        logger.info(
+            f"GitHub main:     [r]{commit_info['hash']}[/r]"
+            f" by {commit_info['author']}"
+            f" ({time_str})"
+        )
+    else:
+        _detail = f" ({commit_err})" if commit_err else ""
+        logger.warning(f"GitHub main:     could not fetch{_detail}")
+
+    if release_version is not None:
+        comparison = compare_versions(__version__, release_version)
+        if comparison < 0:
+            logger.warning(f"A newer version is available: [r]{release_version}[/r]")
+            logger.info("Run [r]siesta self update[/r] to upgrade.")
+        elif comparison > 0:
+            logger.info("You are running a pre-release or development version.")
+        else:
+            logger.success("You are running the latest release.")
 
 
 @self_app.command(name="update")
@@ -1082,10 +1087,11 @@ def self_update(force: bool = False, dry: bool = False):
 
     # Check current vs latest version
     with logger.loading("Checking for updates..."):
-        latest = get_latest_version()
+        latest, check_err = get_latest_version()
 
     if latest is None:
-        logger.warning("Could not check for latest version (network error).")
+        _detail = f" ({check_err})" if check_err else ""
+        logger.warning(f"Could not check for latest version{_detail}.")
         if not force:
             logger.info("Use [r]--force[/r] to update anyway.")
             return
