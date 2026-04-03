@@ -225,6 +225,96 @@ class TestFormatGithubAccessError:
         assert "Not Found" in msg
 
 
+class TestGetLatestCommitInfo:
+    """Tests for get_latest_commit_info()."""
+
+    def _make_mock_commit(self, sha: str, author: str, date):
+        mock_author = MagicMock()
+        mock_author.name = author
+        mock_author.date = date
+
+        mock_commit_obj = MagicMock()
+        mock_commit_obj.author = mock_author
+
+        mock_commit = MagicMock()
+        mock_commit.sha = sha
+        mock_commit.commit = mock_commit_obj
+        return mock_commit
+
+    def test_returns_commit_info_on_success(self):
+        """Returns hash, author, and time for the latest commit."""
+        from datetime import datetime, timezone
+
+        from siesta.utils.github import get_latest_commit_info
+
+        date = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        mock_commit = self._make_mock_commit("abc1234def", "Test User", date)
+
+        mock_commits = MagicMock()
+        mock_commits.__getitem__ = MagicMock(return_value=mock_commit)
+
+        mock_repo = MagicMock()
+        mock_repo.get_commits.return_value = mock_commits
+
+        mock_github = MagicMock()
+        mock_github.get_repo.return_value = mock_repo
+
+        with (
+            patch("siesta.utils.github.Github", return_value=mock_github),
+            patch("siesta.utils.github.get_user_pat", return_value=None),
+        ):
+            info, err = get_latest_commit_info()
+
+        assert err is None
+        assert info is not None
+        assert info["hash"] == "abc1234"
+        assert info["author"] == "Test User"
+        assert info["time"] == date
+
+    def test_returns_none_on_github_exception(self):
+        """GithubException is caught and error string is returned."""
+        from github import GithubException
+
+        from siesta.utils.github import get_latest_commit_info
+
+        mock_github = MagicMock()
+        mock_github.get_repo.side_effect = GithubException(
+            403, {"message": "Forbidden"}
+        )
+
+        with (
+            patch("siesta.utils.github.Github", return_value=mock_github),
+            patch("siesta.utils.github.get_user_pat", return_value=None),
+        ):
+            info, err = get_latest_commit_info()
+
+        assert info is None
+        assert err is not None
+        assert "403" in err
+
+    def test_returns_none_none_on_index_error(self):
+        """Empty commit list (IndexError) returns (None, None)."""
+        from siesta.utils.github import get_latest_commit_info
+
+        mock_commits = MagicMock()
+        mock_commits.__getitem__ = MagicMock(side_effect=IndexError)
+
+        mock_repo = MagicMock()
+        mock_repo.get_commits.return_value = mock_commits
+
+        mock_github = MagicMock()
+        mock_github.get_repo.return_value = mock_repo
+
+        with (
+            patch("siesta.utils.github.Github", return_value=mock_github),
+            patch("siesta.utils.github.get_user_pat", return_value=None),
+        ):
+            info, err = get_latest_commit_info()
+
+        assert info is None
+        assert err is None
+
+
 class TestCompareVersions:
     """Tests for compare_versions()."""
 
