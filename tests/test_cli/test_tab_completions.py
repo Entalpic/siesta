@@ -161,9 +161,7 @@ def isolated_home(tmp_path, monkeypatch):
 @pytest.fixture()
 def mock_which():
     """Patch ``shutil.which`` in the completions module to return a fake path."""
-    with patch(
-        "siesta.completions.shutil.which", return_value=FAKE_EXEC
-    ) as m:
+    with patch("siesta.completions.shutil.which", return_value=FAKE_EXEC) as m:
         yield m
 
 
@@ -908,8 +906,7 @@ class TestHelpEpilogue:
         original = app.help_epilogue
         try:
             app.help_epilogue = (
-                "Tip: enable tab completions with "
-                "`siesta self tab-completions install`"
+                "Tip: enable tab completions with `siesta self tab-completions install`"
             )
             with pytest.raises(SystemExit):
                 app(["--help"], exit_on_error=False)
@@ -936,8 +933,7 @@ class TestHelpEpilogue:
         original = app.help_epilogue
         try:
             app.help_epilogue = (
-                "Tip: enable tab completions with "
-                "`siesta self tab-completions install`"
+                "Tip: enable tab completions with `siesta self tab-completions install`"
             )
             with pytest.raises(SystemExit):
                 app(["self", "--help"], exit_on_error=False)
