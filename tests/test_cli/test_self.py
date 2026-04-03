@@ -7,10 +7,10 @@ import pytest
 
 from siesta import __version__
 from siesta.cli import app
+from siesta.utils.github import format_github_access_error
 from siesta.utils.self import (
     PACKAGE_NAME,
     compare_versions,
-    format_github_access_error,
     get_installation_method,
     get_installation_source,
     get_latest_version,
@@ -141,7 +141,7 @@ class TestGetLatestVersion:
         mock_github = MagicMock()
         mock_github.get_repo.return_value = mock_repo
 
-        with patch("siesta.utils.self.Github", return_value=mock_github):
+        with patch("siesta.utils.github.Github", return_value=mock_github):
             assert get_latest_version(source="github") == ("2.0.0", None)
 
     def test_returns_version_from_github_tags_fallback(self):
@@ -164,7 +164,7 @@ class TestGetLatestVersion:
         mock_github = MagicMock()
         mock_github.get_repo.return_value = mock_repo
 
-        with patch("siesta.utils.self.Github", return_value=mock_github):
+        with patch("siesta.utils.github.Github", return_value=mock_github):
             assert get_latest_version(source="github") == ("1.5.0", None)
 
     def test_returns_none_on_pypi_network_error(self):

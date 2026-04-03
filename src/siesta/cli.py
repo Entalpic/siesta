@@ -74,7 +74,11 @@ from siesta.utils.docs import (
     update_conf_py,
     write_rtd_config,
 )
-from siesta.utils.github import get_user_pat
+from siesta.utils.github import (
+    get_latest_commit_info,
+    get_latest_github_release_version,
+    get_user_pat,
+)
 from siesta.utils.project import (
     add_ipdb_as_debugger,
     write_gitignore,
@@ -84,8 +88,6 @@ from siesta.utils.project import (
 from siesta.utils.self import (
     compare_versions,
     get_installation_method,
-    get_latest_commit_info,
-    get_latest_github_release_version,
     get_latest_version,
     get_update_command,
     get_update_message,
