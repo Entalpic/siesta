@@ -30,7 +30,10 @@ def test_watch_docs_observer_setup(module_test_path, monkeypatch, capture_output
         patch("time.sleep", side_effect=KeyboardInterrupt),
     ):
         with capture_output() as output:
-            app(["docs", "watch"])
+            try:
+                app(["docs", "watch"])
+            except SystemExit as e:
+                assert e.code == 0
 
     # Verify observer was started
     assert mock_observer_instance.start.called
@@ -79,7 +82,10 @@ def test_watch_docs_custom_patterns(module_test_path, monkeypatch, capture_outpu
         patch("time.sleep", side_effect=KeyboardInterrupt),
     ):
         with capture_output():
-            app(["docs", "watch", "--patterns", custom_patterns])
+            try:
+                app(["docs", "watch", "--patterns", custom_patterns])
+            except SystemExit as e:
+                assert e.code == 0
 
     # Verify observer was scheduled with handler using custom patterns
     schedule_call = mock_observer.return_value.schedule.call_args[0]

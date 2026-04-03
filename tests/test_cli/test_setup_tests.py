@@ -28,7 +28,10 @@ def existing_uv_project(tmp_path):
 def test_setup_tests_creates_tests_directory(existing_uv_project, capture_output):
     """Test that setup-tests creates the tests directory with example test."""
     with capture_output() as output:
-        app(["project", "setup-tests"])
+        try:
+            app(["project", "setup-tests"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "Tests infra written" in output_text
@@ -48,7 +51,10 @@ def test_setup_tests_creates_tests_directory(existing_uv_project, capture_output
 def test_setup_tests_creates_github_actions(existing_uv_project, capture_output):
     """Test that setup-tests creates GitHub Actions workflow."""
     with capture_output():
-        app(["project", "setup-tests"])
+        try:
+            app(["project", "setup-tests"])
+        except SystemExit as e:
+            assert e.code == 0
 
     # Check GitHub Actions directory exists
     assert (existing_uv_project / ".github").exists()
@@ -61,16 +67,19 @@ def test_setup_tests_without_actions(existing_uv_project, capture_output):
     with capture_output() as output:
         # Use --deps to install deps but --no-actions to skip actions
         # Pass project name and -i (interactive) to test explicit flag handling
-        app(
-            [
-                "project",
-                "setup-tests",
-                "--project-name=existing_project",
-                "--deps",
-                "--no-actions",
-                "-i",
-            ]
-        )
+        try:
+            app(
+                [
+                    "project",
+                    "setup-tests",
+                    "--project-name=existing_project",
+                    "--deps",
+                    "--no-actions",
+                    "-i",
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "Tests infra written" in output_text
@@ -91,7 +100,10 @@ def test_setup_tests_skips_existing_tests_directory(
     (existing_uv_project / "tests" / "existing_test.py").write_text("# existing test")
 
     with capture_output() as output:
-        app(["project", "setup-tests"])
+        try:
+            app(["project", "setup-tests"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "Tests directory already exists" in output_text
@@ -106,7 +118,10 @@ def test_setup_tests_respects_no_actions(existing_uv_project, capture_output):
     """Test that user flags take precedence (--no-actions)."""
     with capture_output() as output:
         # User specifies --no-actions, defaults should not override it
-        app(["project", "setup-tests", "--no-actions"])
+        try:
+            app(["project", "setup-tests", "--no-actions"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "Tests infra written" in output_text
@@ -124,7 +139,10 @@ def test_setup_tests_respects_no_deps(existing_uv_project, capture_output):
     """Test that user flags take precedence (--no-deps)."""
     with capture_output() as output:
         # User specifies --no-deps, defaults should not override it
-        app(["project", "setup-tests", "--no-deps"])
+        try:
+            app(["project", "setup-tests", "--no-deps"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "Tests infra written" in output_text
@@ -145,16 +163,19 @@ def test_setup_tests_interactive_flag(existing_uv_project, capture_output):
     with capture_output() as output:
         # Use -i with explicit flags to avoid prompts in test
         # -i should override default behavior (which would auto-accept)
-        app(
-            [
-                "project",
-                "setup-tests",
-                "-i",  # interactive mode
-                "--project-name=existing_project",  # explicitly set to avoid prompt
-                "--deps",  # explicitly set to avoid prompt
-                "--no-actions",  # explicitly set to avoid prompt
-            ]
-        )
+        try:
+            app(
+                [
+                    "project",
+                    "setup-tests",
+                    "-i",  # interactive mode
+                    "--project-name=existing_project",  # explicitly set to avoid prompt
+                    "--deps",  # explicitly set to avoid prompt
+                    "--no-actions",  # explicitly set to avoid prompt
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "Tests infra written" in output_text

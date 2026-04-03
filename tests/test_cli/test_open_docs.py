@@ -19,7 +19,10 @@ def test_open_docs(module_test_path, capture_output, platform, monkeypatch):
             if platform == "Windows":
                 with patch("siesta.cli.os.startfile", create=True) as mock_startfile:
                     with patch("siesta.cli.subprocess.call") as mock_call:
-                        app(["docs", "open"])
+                        try:
+                            app(["docs", "open"])
+                        except SystemExit as e:
+                            assert e.code == 0
                         mock_startfile.assert_called_once_with(
                             str(
                                 module_test_path
@@ -34,7 +37,10 @@ def test_open_docs(module_test_path, capture_output, platform, monkeypatch):
             else:
                 # For Darwin and Linux, only mock subprocess.call
                 with patch("siesta.cli.subprocess.call") as mock_call:
-                    app(["docs", "open"])
+                    try:
+                        app(["docs", "open"])
+                    except SystemExit as e:
+                        assert e.code == 0
                     if platform == "Darwin":
                         mock_call.assert_called_once_with(
                             (

@@ -40,10 +40,12 @@ You can also refer to the :ref:`siesta-cli-tutorial` for more information.
 
 """
 
+import builtins
 import getpass
 import os
 import platform
 import subprocess
+import sys
 import time
 from importlib import metadata
 from pathlib import Path
@@ -53,8 +55,10 @@ from typing import Annotated, Optional
 
 from cyclopts import App, Parameter
 from gitignore_parser import parse_gitignore
+from rich import print as rprint
 from watchdog.observers import Observer
 
+from siesta.completions import Shell, detect_current_shell, is_completion_installed
 from siesta.utils.common import (
     get_project_name,
     load_deps,
@@ -159,9 +163,221 @@ app.command(docs_app)
 app.command(project_app)
 app.command(self_app)
 
+# ============================================================================
+# Tab completions sub-app (under `siesta self tab-completions`)
+# ============================================================================
+
+tab_completions_app = App(
+    name="tab-completions",
+    help="Command group — manage shell tab completions (requires a subcommand).",
+)
+self_app.command(tab_completions_app)
+
+
+def _resolve_shell(shell: Shell | None) -> Shell:
+    """Return ``shell`` if given, otherwise detect and return the current shell.
+
+    Parameters
+    ----------
+    shell : Shell | None
+        Explicitly provided shell value, or ``None`` to auto-detect.
+
+    Returns
+    -------
+    Shell
+        The resolved shell (``"bash"`` or ``"zsh"``).
+    """
+    if shell is not None:
+        return shell
+    detected = detect_current_shell()
+    if detected is None:
+        rprint(
+            "[red]Cannot detect current shell. "
+            "Please specify --shell bash or --shell zsh.[/red]"
+        )
+        sys.exit(1)
+    return detected
+
+
+@tab_completions_app.command
+def install(
+    *,
+    shell: Shell | None = None,
+    add_to_startup: bool = True,
+) -> None:
+    """Install tab completions for the current (or specified) shell.
+
+    Writes managed hook and static completion script files to the
+    shell-specific XDG config path, and optionally adds a source line to the
+    shell RC file.
+
+    Parameters
+    ----------
+    shell : {'bash', 'zsh'} | None, optional
+        Target shell. Defaults to the current shell detected from ``$SHELL``.
+        Required when the current shell cannot be detected.
+    add_to_startup : bool, optional
+        When ``True`` (default), append a source line to ``~/.bashrc`` or
+        ``~/.zshrc`` so completions activate in every new shell session.
+        Use ``--no-add-to-startup`` to write the files without editing the RC
+        file.
+    """
+    from siesta.completions import install_managed_completion
+
+    resolved = _resolve_shell(shell)
+    path = install_managed_completion(
+        shell=resolved,
+        generate_fn=app.generate_completion,
+        add_to_startup=add_to_startup,
+    )
+    rprint(f"[green]Managed completion installed to {path}[/green]")
+    if add_to_startup:
+        rc = ".bashrc" if resolved == "bash" else ".zshrc"
+        rprint(
+            f"[dim]Restart your shell or run `source ~/{rc}` "
+            "to activate completions now.[/dim]"
+        )
+
+
+@tab_completions_app.command
+def show(*, shell: Shell | None = None) -> None:
+    """Print the tab completion script to stdout (without installing).
+
+    Outputs the raw completion script for the given shell; suitable for
+    manual sourcing or inspection.
+
+    Parameters
+    ----------
+    shell : {'bash', 'zsh'} | None, optional
+        Target shell. Defaults to the current shell detected from ``$SHELL``.
+        Required when the current shell cannot be detected.
+    """
+    resolved = _resolve_shell(shell)
+    builtins.print(app.generate_completion(shell=resolved), end="")
+
+
+@tab_completions_app.command
+def where(*, shell: Shell | None = None, simple: bool = False) -> None:
+    """Display where managed completion files are stored.
+
+    By default shows a table with the path, existence status, and purpose of
+    each managed file. Use ``--simple`` for plain-text output (one path per
+    line), which is handy for scripting.
+
+    Parameters
+    ----------
+    shell : {'bash', 'zsh'} | None, optional
+        Target shell. Defaults to the current shell detected from ``$SHELL``.
+        Required when the current shell cannot be detected.
+    simple : bool, optional
+        When ``True``, print one ``<label>: <path>`` line per file with no
+        table formatting or descriptions.
+    """
+    from siesta.completions import (
+        managed_completion_paths,
+        resolve_cli_executable,
+        stable_exec_id,
+    )
+
+    resolved = _resolve_shell(shell)
+    exec_path = resolve_cli_executable()
+    exec_id = stable_exec_id(exec_path)
+    paths = managed_completion_paths(shell=resolved, exec_id=exec_id)
+
+    _ENTRIES = [
+        (
+            "base_dir",
+            "Base directory",
+            "Root folder for all managed completion files for this shell.",
+        ),
+        (
+            "hook_file",
+            "Hook file",
+            f"Sourced by ~/{'.bashrc' if resolved == 'bash' else '.zshrc'} "
+            "at shell startup. Sources the static script and wraps the CLI command.",
+        ),
+        (
+            "static_file",
+            "Static completion script",
+            "Cached completion script generated by the CLI framework. "
+            "Sourced instantly at startup — no Python spawned. Its mtime "
+            "tracks the installed CLI version for staleness detection.",
+        ),
+    ]
+
+    if simple:
+        for key, label, _ in _ENTRIES:
+            p: Path = paths[key]
+            exists = "[green]exists[/green]" if p.exists() else "[dim]missing[/dim]"
+            rprint(f"[bold]{label}:[/bold] {p}  ({exists})")
+        return
+
+    from rich.table import Table
+
+    table = Table(
+        title=f"Managed completion paths — [cyan]{resolved}[/cyan]",
+        show_lines=True,
+    )
+    table.add_column("File", style="bold", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Path", no_wrap=True)
+    table.add_column("Description")
+
+    for key, label, description in _ENTRIES:
+        p = paths[key]
+        status = "[green]exists[/green]" if p.exists() else "[dim]missing[/dim]"
+        table.add_row(label, status, str(p), description)
+
+    rprint(table)
+
+
+@tab_completions_app.command
+def uninstall(*, shell: Shell | None = None) -> None:
+    """Remove managed tab completions for the current (or specified) shell.
+
+    Deletes the hook file and cached completion script for the currently
+    active ``siesta`` executable, and strips the source line from the shell
+    RC file.  Files belonging to other siesta installations are left
+    untouched.
+
+    Parameters
+    ----------
+    shell : {'bash', 'zsh'} | None, optional
+        Target shell. Defaults to the current shell detected from ``$SHELL``.
+        Required when the current shell cannot be detected.
+    """
+    from siesta.completions import uninstall_managed_completion
+
+    resolved = _resolve_shell(shell)
+    result = uninstall_managed_completion(shell=resolved)
+    removed: list[Path] = result["removed"]
+    missing: list[Path] = result["missing"]
+
+    if removed:
+        for p in removed:
+            rprint(f"[green]Removed: {p}[/green]")
+    if missing:
+        for p in missing:
+            rprint(f"[dim]Not found (skipped): {p}[/dim]")
+    if not removed and not missing:
+        rprint("[dim]Nothing to remove.[/dim]")
+
+
+def _set_completion_hint() -> None:
+    """Show a tab-completion install tip in ``--help`` when not already installed."""
+    current_shell = detect_current_shell()
+    if current_shell is None or not is_completion_installed(current_shell):
+        shell_flag = " --shell <bash|zsh>" if current_shell is None else ""
+        app.help_epilogue = (
+            f"Tip: enable tab completions with "
+            f"`siesta self tab-completions install{shell_flag}`"
+        )
+
 
 def main():
     """Run the CLI, gracefully handling ``KeyboardInterrupt``."""
+    _set_completion_hint()
+
     # Start background update check (non-blocking)
     update_future = start_background_update_check(metadata.version("siesta"))
     interrupted = False

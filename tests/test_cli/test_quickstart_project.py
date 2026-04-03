@@ -8,7 +8,10 @@ def test_quickstart_project(tmp_path_chdir, capture_output):
     """Test project quickstart command creates expected project structure."""
 
     with capture_output() as output:
-        app(["project", "quickstart"])
+        try:
+            app(["project", "quickstart"])
+        except SystemExit as e:
+            assert e.code == 0
 
     assert "Failed to build the docs" not in output.getvalue()
 
@@ -31,7 +34,10 @@ def test_quickstart_project_as_app(tmp_path_chdir, capture_output):
     """Test project quickstart --as-app creates app structure instead of library."""
 
     with capture_output() as output:
-        app(["project", "quickstart", "--as-app"])
+        try:
+            app(["project", "quickstart", "--as-app"])
+        except SystemExit as e:
+            assert e.code == 0
 
     assert "Failed to build the docs" not in output.getvalue()
     # Should not have src directory for app
@@ -44,7 +50,10 @@ def test_quickstart_project_as_pkg(tmp_path_chdir, capture_output):
     """Test project quickstart --as-pkg creates package structure in root directory."""
 
     with capture_output() as output:
-        app(["project", "quickstart", "--as-pkg"])
+        try:
+            app(["project", "quickstart", "--as-pkg"])
+        except SystemExit as e:
+            assert e.code == 0
 
     assert "Failed to build the docs" not in output.getvalue()
     assert (tmp_path_chdir / "src").exists()
@@ -56,7 +65,10 @@ def test_quickstart_respects_no_tests(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         # User specifies --no-tests, defaults should not override it
-        app(["project", "quickstart", "--no-tests"])
+        try:
+            app(["project", "quickstart", "--no-tests"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "Failed to build the docs" not in output_text
@@ -81,7 +93,10 @@ def test_quickstart_respects_no_actions(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         # User specifies --no-actions, defaults should not override it
-        app(["project", "quickstart", "--no-actions"])
+        try:
+            app(["project", "quickstart", "--no-actions"])
+        except SystemExit as e:
+            assert e.code == 0
 
     assert "Failed to build the docs" not in output.getvalue()
 
@@ -98,14 +113,17 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
 
     with capture_output() as output:
         # User specifies both --no-tests and --no-actions
-        app(
-            [
-                "project",
-                "quickstart",
-                "--no-tests",
-                "--no-actions",
-            ]
-        )
+        try:
+            app(
+                [
+                    "project",
+                    "quickstart",
+                    "--no-tests",
+                    "--no-actions",
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
 
     assert "Failed to build the docs" not in output.getvalue()
 

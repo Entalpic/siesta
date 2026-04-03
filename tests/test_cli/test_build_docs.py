@@ -27,7 +27,11 @@ def module_test_path_no_docs(tmp_path_factory):
     current_dir = Path.cwd()
     try:
         os.chdir(tmp_path)  # Change to temp directory
-        app(["project", "quickstart", "--overwrite"])
+        try:
+            app(["project", "quickstart", "--overwrite"])
+        except SystemExit as e:
+            if e.code != 0:
+                raise
         shutil.rmtree(tmp_path / "docs")
     finally:
         os.chdir(current_dir)  # Always restore original directory
@@ -63,7 +67,10 @@ def test_build_docs_successful(module_test_path, monkeypatch, capture_output):
     monkeypatch.chdir(module_test_path)
 
     with capture_output() as output:
-        app(["docs", "build"])
+        try:
+            app(["docs", "build"])
+        except SystemExit as e:
+            assert e.code == 0
 
     # Verify success message
     assert a_in_b_str_no_space(
@@ -80,7 +87,10 @@ def test_build_docs_with_uv(module_test_path, monkeypatch, capture_output):
     Path("uv.lock").touch()
 
     with capture_output() as output:
-        app(["docs", "build"])
+        try:
+            app(["docs", "build"])
+        except SystemExit as e:
+            assert e.code == 0
 
     # Verify success message
     assert a_in_b_str_no_space(

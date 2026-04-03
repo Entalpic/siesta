@@ -55,7 +55,10 @@ def test_init_docs_with_overwrite(
     (docs_dir / "marker.txt").write_text("original content")
 
     with capture_output() as output:
-        app(["docs", "init", "--overwrite"])
+        try:
+            app(["docs", "init", "--overwrite"])
+        except SystemExit as e:
+            assert e.code == 0
     assert "Failed to build the docs" not in output.getvalue()
 
     assert not (docs_dir / "marker.txt").exists()
@@ -69,7 +72,10 @@ def test_init_docs_package_discovery(
     monkeypatch.chdir(temp_project_with_git_and_remote)
 
     with capture_output() as output:
-        app(["docs", "init"])
+        try:
+            app(["docs", "init"])
+        except SystemExit as e:
+            assert e.code == 0
     assert "Failed to build the docs" not in output.getvalue()
 
     # Check conf.py contains discovered package
@@ -85,7 +91,10 @@ def test_init_docs_project_name(
     monkeypatch.chdir(temp_project_with_git_and_remote)
 
     with capture_output() as output:
-        app(["docs", "init"])
+        try:
+            app(["docs", "init"])
+        except SystemExit as e:
+            assert e.code == 0
     assert "Failed to build the docs" not in output.getvalue()
 
     # Check project name in conf.py
@@ -130,7 +139,10 @@ def test_init_docs_respects_no_deps(
 
     with capture_output() as output:
         # User specifies --no-deps, defaults should not override it
-        app(["docs", "init", "--no-deps"])
+        try:
+            app(["docs", "init", "--no-deps"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     # deps should be False (user specified --no-deps)
