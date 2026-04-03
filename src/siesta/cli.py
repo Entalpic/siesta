@@ -293,7 +293,7 @@ def where(*, shell: Shell | None = None, simple: bool = False) -> None:
         (
             "hook_file",
             "Hook file",
-            f"Sourced by ~/{''.join(['.bashrc' if resolved == 'bash' else '.zshrc'])} "
+            f"Sourced by ~/{'.bashrc' if resolved == 'bash' else '.zshrc'} "
             "at shell startup. Sources the static script and wraps the CLI command.",
         ),
         (
@@ -363,21 +363,21 @@ def uninstall(*, shell: Shell | None = None) -> None:
         rprint("[dim]Nothing to remove.[/dim]")
 
 
-# ---------------------------------------------------------------------------
-# Completion installation hint (shown in --help when not installed)
-# ---------------------------------------------------------------------------
-
-_current_shell = detect_current_shell()
-if _current_shell is None or not is_completion_installed(_current_shell):
-    _shell_flag = " --shell <bash|zsh>" if _current_shell is None else ""
-    app.help_epilogue = (
-        f"Tip: enable tab completions with "
-        f"`siesta self tab-completions install{_shell_flag}`"
-    )
+def _set_completion_hint() -> None:
+    """Show a tab-completion install tip in ``--help`` when not already installed."""
+    current_shell = detect_current_shell()
+    if current_shell is None or not is_completion_installed(current_shell):
+        shell_flag = " --shell <bash|zsh>" if current_shell is None else ""
+        app.help_epilogue = (
+            f"Tip: enable tab completions with "
+            f"`siesta self tab-completions install{shell_flag}`"
+        )
 
 
 def main():
     """Run the CLI, gracefully handling ``KeyboardInterrupt``."""
+    _set_completion_hint()
+
     # Start background update check (non-blocking)
     update_future = start_background_update_check(metadata.version("siesta"))
     interrupted = False

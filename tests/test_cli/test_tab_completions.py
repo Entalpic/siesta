@@ -39,6 +39,7 @@ import pytest
 from siesta.cli import app
 from siesta.completions import (
     _CLI_NAME,
+    _shell_quote,
     detect_current_shell,
     is_completion_installed,
     managed_completion_paths,
@@ -217,6 +218,18 @@ class TestHelpers:
             == tmp_path / ".config" / _CLI_NAME / "completions" / "zsh"
         )
 
+    def test_managed_completion_paths_empty_xdg_treated_as_unset(
+        self, monkeypatch, tmp_path
+    ):
+        """Empty ``$XDG_CONFIG_HOME`` falls back to ``~/.config`` per XDG spec."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", "")
+        monkeypatch.setenv("HOME", str(tmp_path))
+        paths = managed_completion_paths("bash", "abcd1234abcd1234")
+        assert (
+            paths["base_dir"]
+            == tmp_path / ".config" / _CLI_NAME / "completions" / "bash"
+        )
+
     def test_managed_completion_paths_keys(self):
         paths = managed_completion_paths("bash", "1234567890abcdef")
         assert set(paths.keys()) == {"base_dir", "hook_file", "static_file"}
@@ -232,6 +245,21 @@ class TestHelpers:
 
     def test_shell_rc_file_zsh(self):
         assert shell_rc_file("zsh").name == ".zshrc"
+
+    def test_shell_quote_simple_path(self):
+        assert _shell_quote("/usr/bin/siesta") == "'/usr/bin/siesta'"
+
+    def test_shell_quote_path_with_spaces(self):
+        assert _shell_quote("/my path/bin") == "'/my path/bin'"
+
+    def test_shell_quote_path_with_dollar(self):
+        assert _shell_quote("/home/$USER/bin") == "'/home/$USER/bin'"
+
+    def test_shell_quote_path_with_single_quote(self):
+        assert _shell_quote("/it's/a/path") == "'/it'\\''s/a/path'"
+
+    def test_shell_quote_accepts_path_object(self):
+        assert _shell_quote(Path("/usr/bin")) == "'/usr/bin'"
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +307,26 @@ class TestRenderHook:
     def test_bash_hook_does_not_contain_compdef(self, tmp_path):
         hook = render_shell_hook("bash", base_dir=tmp_path)
         assert "compdef" not in hook
+
+    def test_bash_hook_single_quotes_base_dir(self, tmp_path):
+        hook = render_shell_hook("bash", base_dir=tmp_path)
+        assert f"_{_CLI_NAME}_completion_base_dir='{tmp_path}'" in hook
+
+    def test_zsh_hook_single_quotes_base_dir(self, tmp_path):
+        hook = render_shell_hook("zsh", base_dir=tmp_path)
+        assert f"_{_CLI_NAME}_completion_base_dir='{tmp_path}'" in hook
+
+    def test_bash_hook_uses_portable_sha256(self, tmp_path):
+        hook = render_shell_hook("bash", base_dir=tmp_path)
+        assert f"_{_CLI_NAME}_sha256_16" in hook
+        assert "sha256sum" in hook
+        assert "shasum" in hook
+
+    def test_zsh_hook_uses_portable_sha256(self, tmp_path):
+        hook = render_shell_hook("zsh", base_dir=tmp_path)
+        assert f"_{_CLI_NAME}_sha256_16" in hook
+        assert "sha256sum" in hook
+        assert "shasum" in hook
 
 
 # ---------------------------------------------------------------------------

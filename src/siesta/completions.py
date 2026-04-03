@@ -102,6 +102,24 @@ a different CLI tool.
 """
 
 
+def _shell_quote(path: str | Path) -> str:
+    """Single-quote a string for safe embedding in a shell script.
+
+    Uses the standard ``'\''`` idiom to handle embedded single-quotes.
+
+    Parameters
+    ----------
+    path : str | Path
+        Value to quote.
+
+    Returns
+    -------
+    str
+        Shell-safe single-quoted string (e.g. ``'/some/path'``).
+    """
+    return "'" + str(path).replace("'", "'\\''") + "'"
+
+
 # ---------------------------------------------------------------------------
 # Executable resolution
 # ---------------------------------------------------------------------------
@@ -190,7 +208,7 @@ def managed_completion_paths(shell: Shell, exec_id: str) -> dict[str, Path]:
             script.  Its mtime is kept in sync with the CLI executable for
             staleness detection.
     """
-    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
     config_root = (
         Path(xdg_config_home).expanduser()
         if xdg_config_home
@@ -233,7 +251,7 @@ def render_shell_hook(shell: Shell, *, base_dir: Path) -> str:
     str
         Complete shell script text to be written to ``hook.<shell>``.
     """
-    base_dir_str = str(base_dir)
+    base_dir_q = _shell_quote(base_dir)
     if shell == "bash":
         return textwrap.dedent(f"""\
             # {_CLI_NAME} managed completion hook (bash)
@@ -243,14 +261,21 @@ def render_shell_hook(shell: Shell, *, base_dir: Path) -> str:
             # Unset inherited guard so every new shell starts fresh.
             unset _{_CLI_NAME.upper()}_COMPLETION_REFRESHED 2>/dev/null
 
-            _{_CLI_NAME}_completion_base_dir="{base_dir_str}"
+            _{_CLI_NAME}_completion_base_dir={base_dir_q}
+
+            # Portable SHA-256: try sha256sum (coreutils/Linux) then shasum (macOS).
+            _{_CLI_NAME}_sha256_16() {{
+              local hash
+              hash="$(printf '%s' "$1" | sha256sum 2>/dev/null || printf '%s' "$1" | shasum -a 256 2>/dev/null)" || return 1
+              printf '%s' "${{hash%% *}}" | cut -c1-16
+            }}
 
             # Resolve executable and exec_id once at startup (no Python spawned).
             _{_CLI_NAME}_exec_path="$(command -v {_CLI_NAME} 2>/dev/null || true)"
             _{_CLI_NAME}_exec_id=""
             _{_CLI_NAME}_static_file=""
             if [[ -n "${{_{_CLI_NAME}_exec_path}}" ]]; then
-              _{_CLI_NAME}_exec_id="$(printf '%s' "${{_{_CLI_NAME}_exec_path}}" | shasum -a 256 2>/dev/null | awk '{{print $1}}' | cut -c1-16)"
+              _{_CLI_NAME}_exec_id="$(_{_CLI_NAME}_sha256_16 "${{_{_CLI_NAME}_exec_path}}")"
               [[ -z "${{_{_CLI_NAME}_exec_id}}" ]] && _{_CLI_NAME}_exec_id="${{_{_CLI_NAME}_exec_path//\\//__}}"
               _{_CLI_NAME}_static_file="${{_{_CLI_NAME}_completion_base_dir}}/static-${{_{_CLI_NAME}_exec_id}}.bash"
               if [[ -f "${{_{_CLI_NAME}_static_file}}" ]]; then
@@ -294,7 +319,14 @@ def render_shell_hook(shell: Shell, *, base_dir: Path) -> str:
         # Unset inherited guard so every new shell starts fresh.
         unset _{_CLI_NAME.upper()}_COMPLETION_REFRESHED 2>/dev/null
 
-        _{_CLI_NAME}_completion_base_dir="{base_dir_str}"
+        _{_CLI_NAME}_completion_base_dir={base_dir_q}
+
+        # Portable SHA-256: try sha256sum (coreutils/Linux) then shasum (macOS).
+        _{_CLI_NAME}_sha256_16() {{
+          local hash
+          hash="$(printf '%s' "$1" | sha256sum 2>/dev/null || printf '%s' "$1" | shasum -a 256 2>/dev/null)" || return 1
+          printf '%s' "${{hash%% *}}" | cut -c1-16
+        }}
 
         # zsh: prefer whence -p for reliable absolute-path resolution; fall back to
         # command -v and reject relative paths (e.g. from a local ./{_CLI_NAME}).
@@ -314,7 +346,7 @@ def render_shell_hook(shell: Shell, *, base_dir: Path) -> str:
         _{_CLI_NAME}_exec_id=""
         _{_CLI_NAME}_static_file=""
         if [[ -n "${{_{_CLI_NAME}_exec_path}}" ]]; then
-          _{_CLI_NAME}_exec_id="$(printf '%s' "${{_{_CLI_NAME}_exec_path}}" | shasum -a 256 2>/dev/null | awk '{{print $1}}' | cut -c1-16)"
+          _{_CLI_NAME}_exec_id="$(_{_CLI_NAME}_sha256_16 "${{_{_CLI_NAME}_exec_path}}")"
           [[ -z "${{_{_CLI_NAME}_exec_id}}" ]] && _{_CLI_NAME}_exec_id="${{_{_CLI_NAME}_exec_path//\\//__}}"
           _{_CLI_NAME}_static_file="${{_{_CLI_NAME}_completion_base_dir}}/static-${{_{_CLI_NAME}_exec_id}}.zsh"
           [[ -f "${{_{_CLI_NAME}_static_file}}" ]] && source "${{_{_CLI_NAME}_static_file}}"
@@ -335,7 +367,7 @@ def render_shell_hook(shell: Shell, *, base_dir: Path) -> str:
 
           if [[ "${{current_exec}}" != "${{_{_CLI_NAME}_exec_path}}" ]]; then
             _{_CLI_NAME}_exec_path="${{current_exec}}"
-            _{_CLI_NAME}_exec_id="$(printf '%s' "${{_{_CLI_NAME}_exec_path}}" | shasum -a 256 2>/dev/null | awk '{{print $1}}' | cut -c1-16)"
+            _{_CLI_NAME}_exec_id="$(_{_CLI_NAME}_sha256_16 "${{_{_CLI_NAME}_exec_path}}")"
             [[ -z "${{_{_CLI_NAME}_exec_id}}" ]] && _{_CLI_NAME}_exec_id="${{_{_CLI_NAME}_exec_path//\\//__}}"
             _{_CLI_NAME}_static_file="${{_{_CLI_NAME}_completion_base_dir}}/static-${{_{_CLI_NAME}_exec_id}}.zsh"
           fi
@@ -411,7 +443,8 @@ def ensure_rc_source_line(shell: Shell, hook_file: Path) -> None:
     if not rc_file.exists():
         rc_file.write_text("", encoding="utf-8")
 
-    source_line = f'[[ -f "{hook_file}" ]] && source "{hook_file}"'
+    hook_q = _shell_quote(hook_file)
+    source_line = f"[[ -f {hook_q} ]] && source {hook_q}"
     content = rc_file.read_text(encoding="utf-8")
     if source_line not in content:
         with rc_file.open("a", encoding="utf-8") as fh:
@@ -438,7 +471,8 @@ def remove_rc_source_line(shell: Shell, hook_file: Path) -> None:
     if not rc_file.exists():
         return
 
-    source_line = f'[[ -f "{hook_file}" ]] && source "{hook_file}"'
+    hook_q = _shell_quote(hook_file)
+    source_line = f"[[ -f {hook_q} ]] && source {hook_q}"
     comment_line = f"# {_CLI_NAME} managed completion"
     content = rc_file.read_text(encoding="utf-8")
 
