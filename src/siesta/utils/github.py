@@ -204,8 +204,7 @@ def _get_github_client(timeout: float = 5.0) -> Github:
 def _get_latest_version_github(timeout: float = 5.0) -> tuple[str | None, str | None]:
     """Query GitHub for the latest siesta version.
 
-    First tries without authentication (public repo), then falls back to
-    PAT authentication if rate-limited or if access is denied.
+    Uses a PAT if one is configured, otherwise makes an unauthenticated request.
 
     Parameters
     ----------
@@ -219,62 +218,30 @@ def _get_latest_version_github(timeout: float = 5.0) -> tuple[str | None, str | 
         ``(version, None)`` on success, ``(None, None)`` if no release/tag was found,
         or ``(None, err)`` on failure.
     """
-
-    def try_get_version(g: Github) -> str | None:
-        """Try to get version from releases, then tags."""
+    try:
+        g = _get_github_client(timeout=timeout)
         repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
 
         # Try releases first
         try:
             release = repo.get_latest_release()
             tag_name = release.tag_name
-            return tag_name.lstrip("v") if tag_name else None
+            return (tag_name.lstrip("v"), None) if tag_name else (None, None)
         except GithubException as e:
-            # 404 means no releases, try tags
-            if e.status == 404:
-                pass
-            else:
+            # 404 means no releases, fall back to tags
+            if e.status != 404:
                 raise
 
         # Fall back to tags
         tags = repo.get_tags()
         if tags.totalCount > 0:
             tag_name = tags[0].name
-            return tag_name.lstrip("v") if tag_name else None
+            return (tag_name.lstrip("v"), None) if tag_name else (None, None)
 
-        return None
-
-    unauth_forbidden: GithubException | None = None
-
-    # Try unauthenticated first (public repo)
-    try:
-        g = Github(timeout=int(timeout))
-        result = try_get_version(g)
-        if result:
-            return (result, None)
+        return (None, None)
     except GithubException as e:
-        # 403 often means rate limited, will try with auth
-        if e.status == 403:
-            unauth_forbidden = e
-        else:
-            logger.warning(f"Failed to fetch latest version from GitHub: {e}")
-            return (None, format_github_access_error(e))
-
-    # Fall back to PAT authentication (for rate limiting)
-    pat = get_user_pat()
-    if pat:
-        try:
-            g = Github(auth=Token(pat), timeout=int(timeout))
-            result = try_get_version(g)
-            if result:
-                return (result, None)
-        except GithubException as e:
-            logger.warning(f"Failed to fetch latest version from GitHub: {e}")
-            return (None, format_github_access_error(e))
-    elif unauth_forbidden is not None:
-        return (None, format_github_access_error(unauth_forbidden))
-
-    return (None, None)
+        logger.warning(f"Failed to fetch latest version from GitHub: {e}")
+        return (None, format_github_access_error(e))
 
 
 def get_latest_github_release_version(
