@@ -222,29 +222,25 @@ def _get_latest_version_github(timeout: float = 5.0) -> tuple[str | None, str | 
 
     def try_get_version(g: Github) -> str | None:
         """Try to get version from releases, then tags."""
+        repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
+
+        # Try releases first
         try:
-            repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
+            release = repo.get_latest_release()
+            tag_name = release.tag_name
+            return tag_name.lstrip("v") if tag_name else None
+        except GithubException as e:
+            # 404 means no releases, try tags
+            if e.status == 404:
+                pass
+            else:
+                raise
 
-            # Try releases first
-            try:
-                release = repo.get_latest_release()
-                tag_name = release.tag_name
-                return tag_name.lstrip("v") if tag_name else None
-            except GithubException as e:
-                # 404 means no releases, try tags
-                if e.status == 404:
-                    pass
-                else:
-                    raise
-
-            # Fall back to tags
-            tags = repo.get_tags()
-            if tags.totalCount > 0:
-                tag_name = tags[0].name
-                return tag_name.lstrip("v") if tag_name else None
-
-        except GithubException:
-            raise
+        # Fall back to tags
+        tags = repo.get_tags()
+        if tags.totalCount > 0:
+            tag_name = tags[0].name
+            return tag_name.lstrip("v") if tag_name else None
 
         return None
 
