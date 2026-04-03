@@ -7,7 +7,10 @@ from siesta.cli import app
 def test_show_github_pat_masked(capture_output):
     """Test that show-github-pat displays a masked token by default."""
     with capture_output() as output:
-        app(["self", "show-github-pat"])
+        try:
+            app(["self", "show-github-pat"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "fake-github-" in output_text
@@ -19,7 +22,10 @@ def test_show_github_pat_masked(capture_output):
 def test_show_github_pat_full(capture_output):
     """Test that show-github-pat --full displays the full token with a warning."""
     with capture_output() as output:
-        app(["self", "show-github-pat", "--full"])
+        try:
+            app(["self", "show-github-pat", "--full"])
+        except SystemExit as e:
+            assert e.code == 0
 
     output_text = output.getvalue()
     assert "fake-github-pat-for-testing" in output_text
@@ -33,7 +39,10 @@ def test_show_github_pat_none(capture_output):
         patch("siesta.cli.get_user_pat", return_value=None),
     ):
         with capture_output() as output:
-            app(["self", "show-github-pat"])
+            try:
+                app(["self", "show-github-pat"])
+            except SystemExit as e:
+                assert e.code == 0
 
     output_text = output.getvalue()
     assert "No GitHub PAT found" in output_text
