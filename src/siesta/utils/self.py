@@ -29,21 +29,17 @@ from typing import TYPE_CHECKING
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from github import Github, GithubException
-from github.Auth import Token
 from packaging.version import Version
 from platformdirs import user_cache_dir
 
 from siesta.utils.common import logger, run_command
 from siesta.utils.config import (
     DEFAULT_UPDATE_CHECK_HOURS,
-    GITHUB_OWNER,
-    GITHUB_REPO,
     PACKAGE_NAME,
     PYPI_URL,
     UPDATE_CHECK_ENV_VAR,
 )
-from siesta.utils.github import get_user_pat
+from siesta.utils.github import _get_latest_version_github
 
 if TYPE_CHECKING:
     from typing import TypedDict
@@ -142,79 +138,7 @@ def get_installation_source() -> str:
     return "pypi"
 
 
-def _get_latest_version_github(timeout: float = 5.0) -> str | None:
-    """Query GitHub for the latest siesta version.
-
-    First tries without authentication (public repo), then falls back to
-    PAT authentication if rate-limited or if access is denied.
-
-    Parameters
-    ----------
-    timeout : float, optional
-        Timeout for the HTTP request in seconds, by default 5.0.
-        Note: PyGithub uses its own timeout handling.
-
-    Returns
-    -------
-    str | None
-        The latest version string, or ``None`` if the query failed.
-    """
-
-    def try_get_version(g: Github) -> str | None:
-        """Try to get version from releases, then tags."""
-        try:
-            repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
-
-            # Try releases first
-            try:
-                release = repo.get_latest_release()
-                tag_name = release.tag_name
-                return tag_name.lstrip("v") if tag_name else None
-            except GithubException as e:
-                # 404 means no releases, try tags
-                if e.status == 404:
-                    pass
-                else:
-                    raise
-
-            # Fall back to tags
-            tags = repo.get_tags()
-            if tags.totalCount > 0:
-                tag_name = tags[0].name
-                return tag_name.lstrip("v") if tag_name else None
-
-        except GithubException:
-            raise
-
-        return None
-
-    # Try unauthenticated first (public repo)
-    try:
-        g = Github(timeout=int(timeout))
-        result = try_get_version(g)
-        if result:
-            return result
-    except GithubException as e:
-        # 403 often means rate limited, will try with auth
-        if e.status != 403:
-            logger.warning(f"Failed to fetch latest version from GitHub: {e}")
-            return None
-
-    # Fall back to PAT authentication (for rate limiting)
-    pat = get_user_pat()
-    if pat:
-        try:
-            g = Github(auth=Token(pat), timeout=int(timeout))
-            result = try_get_version(g)
-            if result:
-                return result
-        except GithubException as e:
-            logger.warning(f"Failed to fetch latest version from GitHub: {e}")
-
-    return None
-
-
-def _get_latest_version_pypi(timeout: float = 5.0) -> str | None:
+def _get_latest_version_pypi(timeout: float = 5.0) -> tuple[str | None, str | None]:
     """Query PyPI for the latest siesta version.
 
     Parameters
@@ -224,19 +148,22 @@ def _get_latest_version_pypi(timeout: float = 5.0) -> str | None:
 
     Returns
     -------
-    str | None
-        The latest version string, or ``None`` if the query failed.
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, or ``(None, error_message)`` on failure.
     """
     try:
         with urlopen(PYPI_URL, timeout=timeout) as response:
             data = json.loads(response.read().decode("utf-8"))
-            return data.get("info", {}).get("version")
+            ver = data.get("info", {}).get("version")
+            return (ver, None)
     except (URLError, json.JSONDecodeError, TimeoutError) as e:
         logger.warning(f"Failed to fetch latest version from PyPI: {e}")
-        return None
+        return (None, str(e))
 
 
-def get_latest_version(timeout: float = 5.0, source: str | None = None) -> str | None:
+def get_latest_version(
+    timeout: float = 5.0, source: str | None = None
+) -> tuple[str | None, str | None]:
     """Query the appropriate source for the latest siesta version.
 
     The source is determined by how siesta was installed:
@@ -254,8 +181,8 @@ def get_latest_version(timeout: float = 5.0, source: str | None = None) -> str |
 
     Returns
     -------
-    str | None
-        The latest version string, or ``None`` if the query failed.
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, or ``(None, error_message)`` on failure.
     """
     if source is None:
         source = get_installation_source()
@@ -484,7 +411,7 @@ def _check_for_updates_sync(current_version: str) -> tuple[str, str] | None:
         A tuple of (current_version, latest_version) if an update is available,
         or ``None`` if up to date or check failed.
     """
-    latest = get_latest_version(timeout=3.0)
+    latest, _err = get_latest_version(timeout=3.0)
     _write_cache(latest)
 
     if latest is None:

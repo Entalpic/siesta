@@ -1,15 +1,32 @@
 # Copyright 2025 Entalpic
 """Utility functions related to GitHub."""
 
-import re
-from pathlib import Path
+from __future__ import annotations
 
-from github import Github, UnknownObjectException
+import re
+from datetime import datetime
+from pathlib import Path
+from typing import TypedDict
+
+from github import (
+    BadCredentialsException,
+    Github,
+    GithubException,
+    RateLimitExceededException,
+    UnknownObjectException,
+)
 from github.Auth import Token
 from github.Repository import Repository
 from keyring import get_password
 
 from siesta.utils.common import logger, resolve_path
+from siesta.utils.config import GITHUB_OWNER, GITHUB_REPO
+
+
+class CommitInfo(TypedDict):
+    hash: str
+    author: str
+    time: datetime
 
 
 def get_user_pat():
@@ -136,3 +153,150 @@ def fetch_github_files(
         path = Path(base_dir) / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
+
+
+def format_github_access_error(exc: BaseException) -> str:
+    """Summarize a PyGithub or transport error for user-facing messages.
+
+    Parameters
+    ----------
+    exc : BaseException
+        The exception raised when calling the GitHub API.
+
+    Returns
+    -------
+    str
+        A short, human-readable description.
+    """
+    if isinstance(exc, BadCredentialsException):
+        return (
+            "GitHub rejected the token (invalid or expired). "
+            "Run `siesta self set-github-pat` with a valid PAT."
+        )
+    if isinstance(exc, RateLimitExceededException):
+        return "GitHub API rate limit exceeded. Try again later or set a PAT."
+    if isinstance(exc, GithubException):
+        data = exc.data if isinstance(exc.data, dict) else {}
+        msg = data.get("message") or str(exc)
+        return f"GitHub API {exc.status}: {msg}"
+    return str(exc) or type(exc).__name__
+
+
+def _get_github_client(timeout: float = 5.0) -> Github:
+    """Get a GitHub client, trying unauthenticated first then falling back to PAT.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for GitHub API requests in seconds, by default 5.0.
+
+    Returns
+    -------
+    Github
+        A PyGithub client instance.
+    """
+    pat = get_user_pat()
+    if pat:
+        return Github(auth=Token(pat), timeout=int(timeout))
+    return Github(timeout=int(timeout))
+
+
+def _get_latest_version_github(timeout: float = 5.0) -> tuple[str | None, str | None]:
+    """Query GitHub for the latest siesta version.
+
+    Uses a PAT if one is configured, otherwise makes an unauthenticated request.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for the HTTP request in seconds, by default 5.0.
+        Note: PyGithub uses its own timeout handling.
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, ``(None, None)`` if no release/tag was found,
+        or ``(None, err)`` on failure.
+    """
+    try:
+        g = _get_github_client(timeout=timeout)
+        repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
+
+        # Try releases first
+        try:
+            release = repo.get_latest_release()
+            tag_name = release.tag_name
+            return (tag_name.lstrip("v"), None) if tag_name else (None, None)
+        except GithubException as e:
+            # 404 means no releases, fall back to tags
+            if e.status != 404:
+                raise
+
+        # Fall back to tags
+        tags = repo.get_tags()
+        if tags.totalCount > 0:
+            tag_name = tags[0].name
+            return (tag_name.lstrip("v"), None) if tag_name else (None, None)
+
+        return (None, None)
+    except GithubException as e:
+        logger.warning(f"Failed to fetch latest version from GitHub: {e}")
+        return (None, format_github_access_error(e))
+
+
+def get_latest_github_release_version(
+    timeout: float = 5.0,
+) -> tuple[str | None, str | None]:
+    """Get the latest release version from GitHub.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for the HTTP request in seconds, by default 5.0.
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        ``(version, None)`` on success, ``(None, None)`` if no release or tag was found,
+        or ``(None, error_message)`` if the query failed.
+    """
+    return _get_latest_version_github(timeout=timeout)
+
+
+def get_latest_commit_info(
+    timeout: float = 5.0, branch: str = "main"
+) -> tuple[CommitInfo | None, str | None]:
+    """Get info about the latest commit on a branch from GitHub.
+
+    Parameters
+    ----------
+    timeout : float, optional
+        Timeout for the HTTP request in seconds, by default 5.0.
+    branch : str, optional
+        The branch to get the latest commit from, by default ``"main"``.
+
+    Returns
+    -------
+    tuple[CommitInfo | None, str | None]
+        ``(info, None)`` on success, ``(None, None)`` if the branch has no commits,
+        or ``(None, error_message)`` if the query failed.
+    """
+    try:
+        g = _get_github_client(timeout=timeout)
+        repo = g.get_repo(f"{GITHUB_OWNER}/{GITHUB_REPO}")
+        commits = repo.get_commits(sha=branch)
+        commit = commits[0]
+        return (
+            {
+                "hash": commit.sha[:7],
+                "author": commit.commit.author.name,
+                "time": commit.commit.author.date,
+            },
+            None,
+        )
+    except GithubException as e:
+        return (None, format_github_access_error(e))
+    except IndexError:
+        return (None, None)
+    except Exception as e:
+        return (None, format_github_access_error(e))
