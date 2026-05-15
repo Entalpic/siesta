@@ -156,6 +156,21 @@ The split at step 1 is intentional: `Human.md` is your orientation, not the agen
 
 That's the order. A session structured this way feels like working with a senior collaborator who happens to have no memory between days.
 
+## Lifecycle gate: create missing layers from the top
+
+The hierarchy is also an ordering constraint. An agent should not execute work from a lower layer until the layers above it exist and contain enough researcher-owned content to constrain the task.
+
+When a layer is missing, create only the first missing layer from its matching template, then stop for researcher review:
+
+1. `research_plan.md` first — the anchor must name the question, approach, success criteria, and current phase before roadmap work is meaningful.
+2. `plan.md` second — the medium-grained phase map must exist before one-commit TODOs are scoped.
+3. `TODO.md` third — implementation starts only from a TODO with landmarks, constraints, and acceptance criteria.
+4. `notes.md` before build / diagnosis work — learnings need somewhere to land before the project starts generating hard-won context.
+
+`handoff.md` is different: create it at session end or when work stops midstream. It does not block starting the hierarchy, but its absence is a drift signal when prior work was left in flight.
+
+The only acceptable shortcut is an explicit one: if you choose to skip a missing layer, the agent should name which discipline is being traded and ask you to acknowledge the trade before continuing.
+
 ## How the layers fail — and the counter-ritual for each
 
 Common failure modes, and the cheapest practice that prevents each:

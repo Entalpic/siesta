@@ -49,6 +49,7 @@ The rest of the skill folder splits cleanly by purpose — keep the split intact
    - `templates/{research-plan,plan,todo,notes,handoff}-template.md` — lifecycle scaffolds the agent uses on demand during the project, **not** materialized at init.
 3. The **escalation pointer** — telling the agent to read `Human.md` first when the task is high-stakes (irreversible, data-touching, multi-step, judgment-heavy) or when starting a long session — is present in both `SKILL.md` (top of file) and `references/agent.md` (top of the templated `AGENT.md`).
 4. The skill's `description` frontmatter has been updated to include `Human.md` in its trigger surface so the skill matches user requests about drafting/auditing `Human.md`.
+5. The skill now enforces the lifecycle hierarchy before implementation work: missing `research_plan.md` blocks `plan.md` / `TODO.md` / code work, missing `plan.md` blocks TODO execution, incomplete TODO contracts block generation, and missing `notes.md` blocks build / diagnosis work that would produce learnings. The same top-down rule is summarized in `doc-hierarchy.md`.
 
 There is no Python code change yet. Siesta is at parity with `main` apart from the skill folder.
 
