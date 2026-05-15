@@ -16,11 +16,7 @@ operation is local, interactive-by-default, and idempotent where practical. Ther
 persistent state beyond an update-check cache and the OS keyring entry holding an optional
 GitHub Personal Access Token.
 
-The dominant design concern is **safe mutation of a user's working directory**. The
-codebase encodes this through a strict command lifecycle (validate → collect decisions →
-mutate), a conflict-aware file-writing layer (skip / overwrite / backup), and a security
-policy that keeps secrets off the command line. These invariants — not any framework — are
-what an engineer must understand to reason about the system.
+
 
 ## System Architecture
 
