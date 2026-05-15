@@ -24,7 +24,7 @@ For the workflow itself (philosophy, discipline rituals, document hierarchy), se
 
 ## Documentation hierarchy
 
-Read in this order when picking up the project. The researcher's reading order starts with `Human.md`; yours starts here.
+Read in this order when picking up the project. The researcher's reading order starts with `Human.md`; yours starts here. Some lifecycle docs may not exist yet: `research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, and `handoff.md` are created from the bundled skill templates only when real work calls for them.
 
 1. `handoff.md` — what the previous session left in flight.
 2. `plan.md` / `TODO.md` — the next chunk of work.
@@ -33,19 +33,26 @@ Read in this order when picking up the project. The researcher's reading order s
 
 ## Repo layout
 
-- `src/[pkg]/` — implementation. [🙋 Brief one-liner per top-level module.]
-- `tests/` — pytest. Tests are written in a separate session from the code they cover.
-- `experiments/` — scripts that drive runs or analyses. One script per experiment, named `[date]_[short_slug].py`.
-- `data/` — read-only. Never modified by code.
-- `outputs/` — write-only by experiment scripts (results, figures, logs). Gitignored except for index files.
-- `references/` — external code, papers, prior work, baselines we compare against.
+This project was scaffolded by `siesta project quickstart --explo`. Defaults may differ if the quickstart used app/package variants or disabled optional surfaces; correct this section before assigning implementation work.
+
+- `pyproject.toml` / `uv.lock` — uv-managed Python project metadata and locked dependencies.
+- `src/[pkg]/` — default siesta library layout. [🙋 Brief one-liner per top-level module.]
+- `tests/` — pytest infrastructure, if enabled by quickstart.
+- `docs/` — Sphinx documentation, if enabled by quickstart.
+- `.github/workflows/test.yml` — GitHub Actions test workflow, if enabled by quickstart.
+- `.claude/skills/agentic-exploration/` — bundled workflow skill plus lifecycle templates for future `research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, and `handoff.md`.
+- `Human.md` / `AGENT.md` — init-time workflow surfaces. `Human.md` owns philosophy; this file owns project-specific agent rules.
+- `[🙋 Optional project directories: experiments, data, outputs, references, notebooks, external baselines, or other research surfaces.]`
 
 ## Commands
 
-- Test: `[🙋 exact command]`
-- Lint / format: `[🙋 exact command]`
-- Run main experiment / analysis: `[🙋 exact command]`
-- Evaluate: `[🙋 exact command]`
+- Setup: `uv sync`
+- Test: `uv run pytest`
+- Lint: `uv run ruff check .`
+- Format: `uv run ruff format .`
+- Docs: `siesta docs build` if docs exist, `siesta docs init` if no docs
+- Run main experiment / analysis: `[🙋 exact command or delete line]`
+- Evaluate: `[🙋 exact command or delete line]`
 
 Always run tests after any change to `src/`. Don't ask, just run them.
 
@@ -69,7 +76,6 @@ Always run tests after any change to `src/`. Don't ask, just run them.
 - One TODO, one commit.
 - Commit message: Conventional Commits style — `<type>(scope): <imperative description>`. Example: `fix(loader): off-by-one in load_batch shard boundary`. Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`.
 - Never `git push --force`, never `git reset --hard` without asking.
-- Never modify data files in `data/`.
 
 ## Tests are written separately
 
@@ -77,12 +83,11 @@ Tests for new code are written by me, or in a session that doesn't see the imple
 
 ## Hard rules — never do these without asking
 
-- Modify anything under `data/`.
-- Delete checkpoints, run outputs, or anything under `outputs/`.
-- Change the random seed conventions.
 - Force-push or rewrite published history.
 - Add a new dependency without checking with me.
 - Disable or skip a failing test instead of fixing the underlying issue.
+- Print, commit, summarize, or expose secrets from `.env`, key files, local config, OS keyrings, MCP settings, or external-service credentials.
+- [🙋 Project-specific hard rules: data, checkpoints, cluster jobs, external services, random seeds, public outputs.]
 
 ## Decisions reserved to me (the researcher)
 
