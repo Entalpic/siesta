@@ -33,7 +33,8 @@ Every TODO is a **contract**. Before an agent generates code, the contract must 
 
 ### [🙋 TODO-0001] [🙋 `feat(scope): imperative one-liner` — this becomes the commit message]
 
-**Why:** [🙋 one sentence — which `plan.md` item or `research_plan.md` phase does this serve?]
+**Source plan item:** [🙋 which `plan.md` item does this serve? e.g. "Phase 2 / Theme A / item 3"]
+**Research-plan anchor:** [🙋 which `research_plan.md` phase or success criterion does this trace to?]
 
 **Landmarks:**
 - [🙋 `path/to/file.py:42` — function `name` that needs extending / replacing / creating]
@@ -45,11 +46,14 @@ Every TODO is a **contract**. Before an agent generates code, the contract must 
 - *Type signature / interface:* [🙋 e.g. `def load_batch(shard_id: int, layout: Layout) -> Batch:`]
 - *Docstring expectations:* [🙋 e.g. numpy-style, include shape / dtype where relevant]
 - *Explicit DO-NOTs:* [🙋 e.g. "do not touch the old `load_batch_v1` path; it's still in use elsewhere". "do not introduce a new dependency."]
+- *Security / privacy:* [🙋 does this task touch credentials, external services, datasets, user data, or MCP/agent access? State what was assessed. `N/A` is valid but must be explicit.]
 
 **Acceptance criteria:**
 - [🙋 The specific, verifiable thing that proves this is done. A passing test, a generated figure matching a reference, a numerical match against a baseline within a tolerance, a CLI output. Not "looks good to me".]
 
 **Estimate / who:** [🙋 e.g. "agent, ~20 min" or "researcher — requires judgment on edge case X"]
+
+**Concurrency / conflict risk:** [🙋 files likely to collide if another task runs in parallel; safe to scout alongside? e.g. "conflicts with anything touching `SKILL.md`; scout-safe" or "N/A — serial only"]
 
 **Notes:** [🙋 optional — anything the agent needs to know upfront. Links to `notes.md` entries, prior failed attempts, references.]
 

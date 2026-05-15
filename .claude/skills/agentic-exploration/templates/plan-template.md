@@ -10,8 +10,9 @@ You can keep `plan.md` and `TODO.md` as separate files (this template) or fold b
 
 1. Copy the fenced block below into your project root as `plan.md`.
 2. Group items by phase (from `research_plan.md`'s roadmap) or by theme if phases are too coarse.
-3. Re-scope at every phase boundary; archive completed phases.
-4. When an item is ready to be done, move it into `TODO.md` with a full contract — *don't* execute items directly from `plan.md`. The contract step is non-negotiable.
+3. Give each item a stable identifier (e.g. `P2-A3` for phase 2 / theme A / item 3) so TODOs can reference them. The identifier doesn't need to be formal — just unique enough that a TODO's `Source plan item` field can point back unambiguously.
+4. Re-scope at every phase boundary; archive completed phases.
+5. When an item is ready to be done, move it into `TODO.md` with a full contract — *don't* execute items directly from `plan.md`. The contract step is non-negotiable.
 
 ## What does *not* go in `plan.md`
 
@@ -36,23 +37,25 @@ You can keep `plan.md` and `TODO.md` as separate files (this template) or fold b
 
 ### [🙋 Theme A — e.g. "data plumbing"]
 
-- [🙋 Item — one line. Why it's needed. Any upstream dependency.]
-- [🙋 Item — ...]
-- [🙋 Item — ...]
+- [🙋 `P{N}-A1` Item — one line. Why it's needed. Any upstream dependency.]
+- [🙋 `P{N}-A2` Item — ...]
+- [🙋 `P{N}-A3` Item — ...]
 
 **Risks / unknowns for this theme:** [🙋 what could go sideways; what would block progress; what's the cheap probe that would resolve the risk?]
 
+**Security / privacy considerations:** [🙋 does this theme touch credentials, external services, datasets, user data, or MCP/agent access? `None identified` is valid but must be explicit.]
+
 ### [🙋 Theme B — e.g. "baseline reproduction"]
 
-- [🙋 Item — depends on Theme A item N]
-- [🙋 Item — ...]
+- [🙋 `P{N}-B1` Item — depends on `P{N}-A1`]
+- [🙋 `P{N}-B2` Item — ...]
 
 **Risks / unknowns:** [🙋 ...]
 
 ### [🙋 Theme C — e.g. "the new method"]
 
-- [🙋 Item — ...]
-- [🙋 Item — ...]
+- [🙋 `P{N}-C1` Item — ...]
+- [🙋 `P{N}-C2` Item — ...]
 
 **Risks / unknowns:** [🙋 ...]
 

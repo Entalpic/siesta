@@ -91,6 +91,8 @@ See [references/agent.md](references/agent.md) for the starting `AGENT.md` siest
 
 An agent can *draft* a TODO from a vague goal, but you sign off on scope and acceptance criteria. The drafting is mechanical; the decision is yours.
 
+**Traceability is required, not optional.** Every TODO must name the `plan.md` item it serves and the `research_plan.md` anchor it traces to. If a TODO cannot point to either, it is either scope creep (reject it) or evidence that the higher layers are stale (update them first). This traceability also runs upward: when a TODO surfaces a discovery that contradicts or extends the anchor, that's a signal to update `research_plan.md` — not to silently expand scope.
+
 You can keep these as separate files or use one file with two sections. Both are fine.
 
 **Trap:** vague TODOs. "Improve the dataloader" is not a TODO; it's a wish. A good TODO names the file, the function, the new behavior, and the test that proves it. Re-read each TODO and ask: could a fresh agent with no other context do this correctly? If no, refine it.
@@ -171,6 +173,26 @@ When a layer is missing, create only the first missing layer from its matching t
 
 The only acceptable shortcut is an explicit one: if you choose to skip a missing layer, the agent should name which discipline is being traded and ask you to acknowledge the trade before continuing.
 
+## Traceability: how layers constrain each other
+
+The hierarchy is not just a reading order — it is a constraint system. Higher layers constrain lower layers, and lower-layer discoveries can trigger updates to higher layers.
+
+**Top-down:** `research_plan.md` defines what success looks like; `plan.md` breaks that into phases with ordering and risk; `TODO.md` linearizes phases into one-commit contracts with acceptance criteria. A TODO that introduces a goal not present in `research_plan.md` is scope creep — reject it or update the anchor first.
+
+**Bottom-up:** implementation and debugging often surface information that the anchor didn't anticipate. When a TODO reveals a new constraint, a failed assumption, or a better approach, that learning should be promoted upward — into `notes.md` immediately, into `research_plan.md` or `plan.md` at the next phase boundary or audit. Suppressing the signal to avoid updating a "stable" document is how anchors go stale.
+
+**Audits check traceability.** The audit mode described in `SKILL.md` is the operational mechanism for catching drift between layers. Run an audit before builds, at phase boundaries, and on demand. It checks for orphan TODOs, orphan plan items, stale anchors, vague contracts, dependency conflicts, scope creep, and security/privacy gaps. The audit is read-only — it surfaces what needs attention; the researcher decides what to fix.
+
+## Scout and builder ownership
+
+The hierarchy is shared between the researcher, scouts, and builders — but not equally.
+
+- **The researcher** owns all judgment calls: what goes into `research_plan.md`, what counts as success, whether to pivot, and when a layer needs updating. No agent writes to these surfaces without sign-off.
+- **Scouts** are read-only. They read the hierarchy to prepare handoff documents in `plans/` for a future builder. Multiple scouts may run in parallel; they do not commit or edit lifecycle docs.
+- **Builders** implement one TODO at a time, mutating code, lifecycle docs, and git history. At most one builder may be active. A builder starts from a scout handoff or a researcher prompt, but must verify alignment before editing.
+
+This separation exists because parallel builds are the most dangerous source of drift: two agents making independent decisions about the same conceptual surface produce contradictions that are expensive to untangle. Serial builds with parallel scouts give most of the throughput benefit without the conflict risk.
+
 ## How the layers fail — and the counter-ritual for each
 
 Common failure modes, and the cheapest practice that prevents each:
@@ -180,6 +202,7 @@ Common failure modes, and the cheapest practice that prevents each:
 - **`TODO.md` items are wishes, not tasks.** Vague TODOs lead to filler generations. Counter-ritual: the per-iteration discipline check at the end of the inner loop catches this — if a TODO closed without acceptance criteria, the next one starts vague unless you flag it.
 - **`notes.md` is stream-of-consciousness no one re-reads.** Counter-ritual: weekly compaction. Promote, prune, restructure — don't grow.
 - **No `handoff.md`, every session pays a context-restoration tax.** Counter-ritual: write one at the end of every session you're not sure will continue (most of them). Cheap to write, expensive to skip.
+- **No security/privacy assessment on sensitive tasks.** Tasks touching credentials, external services, datasets, user data, or MCP/agent access get built without anyone checking exposure risk. Counter-ritual: the TODO contract requires a `Security / privacy` field — `N/A` is valid, but must be explicit. The audit mode flags gaps.
 
 ## Lifecycle and maintenance of the hierarchy
 

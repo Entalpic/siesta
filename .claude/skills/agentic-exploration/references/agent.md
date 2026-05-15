@@ -77,6 +77,10 @@ Always run tests after any change to `src/`. Don't ask, just run them.
 - Commit message: Conventional Commits style — `<type>(scope): <imperative description>`. Example: `fix(loader): off-by-one in load_batch shard boundary`. Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`.
 - Never `git push --force`, never `git reset --hard` without asking.
 
+## Concurrency
+
+Scouts may run in parallel; builds run serially. At most one builder may be active at a time. If you're asked to build while another build is in progress, ask for direction — don't improvise. See the `agentic-exploration` skill for the full concurrency protocol.
+
 ## Tests are written separately
 
 Tests for new code are written by me, or in a session that doesn't see the implementation. If you're being asked to write code, do not also volunteer to write its tests in the same turn unless I explicitly ask. The point is to keep verification independent of implementation — and I am the ultimate verifier.
@@ -87,6 +91,7 @@ Tests for new code are written by me, or in a session that doesn't see the imple
 - Add a new dependency without checking with me.
 - Disable or skip a failing test instead of fixing the underlying issue.
 - Print, commit, summarize, or expose secrets from `.env`, key files, local config, OS keyrings, MCP settings, or external-service credentials.
+- Build a task that touches credentials, external services, datasets, user data, or MCP/agent access without an explicit security/privacy assessment in the TODO contract (`N/A` is valid, but must be stated).
 - [🙋 Project-specific hard rules: data, checkpoints, cluster jobs, external services, random seeds, public outputs.]
 
 ## Decisions reserved to me (the researcher)
