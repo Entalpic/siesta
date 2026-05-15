@@ -29,7 +29,7 @@ Every line here is something you can defend in a meeting. If an agent drafted a 
 
 **For agents:** this is the file the agent reads when it needs to make a *judgment call about scope* — but the judgment call itself is yours. The agent surfaces the question; you answer it. Without this anchor, every scoping decision becomes ad-hoc and the agent will fill in plausible-but-wrong defaults.
 
-See [research-plan-template.md](research-plan-template.md) for a starting template.
+See [research-plan-template.md](templates/research-plan-template.md) for a starting template the agent uses when materializing `research_plan.md`.
 
 ## Researcher manifesto layer: `Human.md`
 
@@ -71,7 +71,7 @@ Keep it short — a few hundred lines max. If it grows beyond that, the agent's 
 
 This is your **rulebook for the agent**. You write the rules; the agent follows them. When a rule is missing because an agent did something you didn't want, *you* add the rule — once, here — rather than repeating the correction in every prompt. That's how the file earns its keep over time.
 
-See [agent.md](agent.md) for a starting template.
+See [references/agent.md](references/agent.md) for the starting `AGENT.md` siesta copies into the project root at init.
 
 ## Roadmap layer: `plan.md` and `TODO.md`
 
@@ -95,7 +95,7 @@ You can keep these as separate files or use one file with two sections. Both are
 
 **Trap:** vague TODOs. "Improve the dataloader" is not a TODO; it's a wish. A good TODO names the file, the function, the new behavior, and the test that proves it. Re-read each TODO and ask: could a fresh agent with no other context do this correctly? If no, refine it.
 
-See [plan-template.md](plan-template.md) and [todo-template.md](todo-template.md) for starting templates.
+See [plan-template.md](templates/plan-template.md) and [todo-template.md](templates/todo-template.md) for starting templates the agent uses when materializing `plan.md` / `TODO.md`.
 
 ## Discovery layer: `notes.md`
 
@@ -117,7 +117,7 @@ Curation is **your** job. Agents can append (and should — every diagnosis they
 
 **For agents:** this is the highest-leverage file for cross-session continuity. A fresh agent that reads `notes.md` first avoids relearning every lesson the previous session paid for.
 
-See [notes-template.md](notes-template.md) for a starting template.
+See [notes-template.md](templates/notes-template.md) for a starting template the agent uses when materializing `notes.md`.
 
 ## Handoff layer: `handoff.md`
 
@@ -139,7 +139,7 @@ See [notes-template.md](notes-template.md) for a starting template.
 
 This file is short-lived and often overwritten — that's fine. It's a baton, passed between *your sessions* (and the agents you pair with in each), not an archive.
 
-See [handoff-template.md](handoff-template.md) for a starting template.
+See [handoff-template.md](templates/handoff-template.md) for a starting template the agent uses when drafting `handoff.md`.
 
 ## How the layers compose
 

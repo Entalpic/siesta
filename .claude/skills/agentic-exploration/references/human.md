@@ -16,10 +16,10 @@ This file is *yours*. The operational protocol the agent enforces lives separate
 - The research question, approach, methodology, success criteria (→ `research_plan.md`).
 - Today's task or work-in-flight (→ `TODO.md` / `handoff.md`).
 - Library quirks, debugging diagnostics, failed experiments (→ `notes.md`).
-- Per-layer maintenance details (→ [`references/doc-hierarchy.md`](doc-hierarchy.md)).
+- Per-layer maintenance details (→ [`.claude/skills/agentic-exploration/doc-hierarchy.md`](.claude/skills/agentic-exploration/doc-hierarchy.md)).
 - Operational rules for the agent (→ the `agentic-exploration` skill at `.claude/skills/agentic-exploration/SKILL.md`).
 
-If `Human.md` starts looking like a second `CLAUDE.md`, or like a duplicate of the skill, you've lost the split. The fix: re-read [`agent.md`](agent.md), this template, and the skill side-by-side; whatever overlaps probably belongs in only one of them.
+If `Human.md` starts looking like a second `CLAUDE.md`, or like a duplicate of the skill, you've lost the split. The fix: re-read [`AGENT.md`](AGENT.md), this file, and the skill side-by-side; whatever overlaps probably belongs in only one of them.
 
 ---
 
@@ -87,7 +87,7 @@ Layer your project across documents organized by how often each changes. Each la
 
 The trap to avoid: dumping everything into one giant `CLAUDE.md`. It bloats, drifts, and gets ignored. Keep each layer focused and link between them.
 
-For per-layer details — what goes where, what the trap is, what the maintenance rhythm looks like — see the deep-dive appendix at `.claude/skills/agentic-exploration/references/doc-hierarchy.md`. Come back to it during weekly compaction or when a layer feels wrong.
+For per-layer details — what goes where, what the trap is, what the maintenance rhythm looks like — see the deep-dive appendix at `.claude/skills/agentic-exploration/doc-hierarchy.md`. Come back to it during weekly compaction or when a layer feels wrong.
 
 For a starting `AGENT.md`, see `.claude/skills/agentic-exploration/references/agent.md`.
 

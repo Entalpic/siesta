@@ -14,7 +14,7 @@ This is the handoff doc the previous agent wrote at the user's request. Read it 
 
 **The bigger picture**: research projects (ML experiments, scientific simulation, data analysis) work best when augmented by agents — but only if the project is structured to keep the researcher in ownership of the *what* and *why* while agents handle the *how*. Without active discipline, projects drift to ad-hoc within weeks, and agent-augmented becomes "agent-replaced", with all the contamination that implies. The `agentic-exploration` skill encodes the protocol for keeping that discipline alive. Phase 2 is making it one CLI command away for any new repo.
 
-The relevant background reading is [`system-architecture.md`](system-architecture.md) for siesta itself, and the four files under [`.claude/skills/agentic-exploration/`](.claude/skills/agentic-exploration/) for the skill.
+The relevant background reading is [`system-architecture.md`](system-architecture.md) for siesta itself, and the contents of [`.claude/skills/agentic-exploration/`](.claude/skills/agentic-exploration/) for the skill (`SKILL.md`, `doc-hierarchy.md`, `references/`, `templates/`).
 
 ---
 
@@ -30,20 +30,23 @@ The skill enforces a **three-surface model**. Do not collapse, duplicate, or ren
 
 The split is intentional. Each file is single-purpose. **If you find yourself duplicating content across them, you have lost the split — re-read the skill and re-do the work.** This is the single biggest mistake to avoid in Phase 2.
 
-Two more files exist as deep-dive references inside the skill:
-- [`.claude/skills/agentic-exploration/references/doc-hierarchy.md`](.claude/skills/agentic-exploration/references/doc-hierarchy.md) — per-layer content and maintenance rhythms appendix.
-- [`.claude/skills/agentic-exploration/references/agent.md`](.claude/skills/agentic-exploration/references/agent.md) and [`.../references/human.md`](.claude/skills/agentic-exploration/references/human.md) — the templates Phase 2 will materialize.
+The rest of the skill folder splits cleanly by purpose — keep the split intact:
+
+- [`.claude/skills/agentic-exploration/doc-hierarchy.md`](.claude/skills/agentic-exploration/doc-hierarchy.md) — per-layer content and maintenance rhythms appendix. Lives at skill root; read on demand from inside the bundled skill; **never** copied to project root.
+- [`.claude/skills/agentic-exploration/references/`](.claude/skills/agentic-exploration/references/) — **init-time** materials. Copied verbatim (with substitutions) into the project root by `--explo`. Two files: [`references/agent.md`](.claude/skills/agentic-exploration/references/agent.md) → `AGENT.md`, [`references/human.md`](.claude/skills/agentic-exploration/references/human.md) → `Human.md`.
+- [`.claude/skills/agentic-exploration/templates/`](.claude/skills/agentic-exploration/templates/) — **lifecycle** materials. **Not** copied at init. Stay inside the bundled skill. The agent reaches for one of these only when the researcher's real work calls for the corresponding artifact for the first time (`research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, `handoff.md`) and scaffolds it then — not before.
 
 ---
 
 ## What is already done (Phase 1 + Phase 1.5)
 
 1. The skill was assessed and restructured under the **Option A** (audience-split) model — previously `SKILL.md` was a dual-audience manifesto + agent protocol; now `SKILL.md` is purely the agent protocol and `Human.md` (templated) is the canonical philosophy.
-2. The four files in `.claude/skills/agentic-exploration/` are in their final state:
-   - `SKILL.md` — 116 lines, agent-facing operational protocol.
-   - `references/human.md` — 230 lines, canonical researcher manifesto template.
-   - `references/agent.md` — 137 lines, project-specific agent rulebook template (with the escalation pointer to `Human.md`).
-   - `references/doc-hierarchy.md` — 176 lines, deep-dive appendix.
+2. The skill folder `.claude/skills/agentic-exploration/` is in its final layout:
+   - `SKILL.md` — agent-facing operational protocol.
+   - `doc-hierarchy.md` — deep-dive appendix (skill-internal; not copied to project root).
+   - `references/human.md` — canonical researcher manifesto template (becomes `Human.md` at init).
+   - `references/agent.md` — project-specific agent rulebook template (becomes `AGENT.md` at init; with the escalation pointer to `Human.md`).
+   - `templates/{research-plan,plan,todo,notes,handoff}-template.md` — lifecycle scaffolds the agent uses on demand during the project, **not** materialized at init.
 3. The **escalation pointer** — telling the agent to read `Human.md` first when the task is high-stakes (irreversible, data-touching, multi-step, judgment-heavy) or when starting a long session — is present in both `SKILL.md` (top of file) and `references/agent.md` (top of the templated `AGENT.md`).
 4. The skill's `description` frontmatter has been updated to include `Human.md` in its trigger surface so the skill matches user requests about drafting/auditing `Human.md`.
 
@@ -65,15 +68,11 @@ The default behavior of `siesta project quickstart` (no `--explo`, no `--prod`) 
 
 **Placeholder convention.** Both templates use `[🙋 …]` brackets to mark every spot the researcher must contribute to. The 🙋 emoji is the single signal — `grep '🙋'` in any scaffolded project surfaces every researcher-input spot. Siesta's role: substitute the values it knows (project name from `--name` or detected from `pyproject.toml`, tooling commands it can infer, etc.) and **leave the rest intact**. In interactive mode (`-i`), siesta may prompt the user for any `[🙋 …]` it can sensibly populate from the prompt; in non-interactive mode, leave everything not already known. **Never plausibly fill a `[🙋 …]` placeholder with invented content** — that's the contamination the skill is designed to prevent. The 🙋 marker must round-trip: it lives in the template, it lives in the scaffolded output (for unfilled spots), and the verification step below greps for it.
 
-Under `--explo`, siesta should produce:
+Under `--explo`, siesta should produce **only** the init-time surface. The lifecycle docs (`research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, `handoff.md`) are **not** pre-created — the agent materializes each one from `templates/` when the researcher's real work first calls for it. Pre-scaffolding empty lifecycle files would be cargo-culting the workflow; the discipline is that each file appears when it has something to hold.
 
 1. `Human.md` — materialized from [`.claude/skills/agentic-exploration/references/human.md`](.claude/skills/agentic-exploration/references/human.md), extracting only the fenced template block (between the two `---` separators inside the file). The `[🙋 …]` placeholders **must be preserved** — do not plausibly fill them. Project name in the template's `# [🙋 Project name] — researcher guide` heading gets substituted (siesta knows the project name).
 2. `AGENT.md` — materialized from [`.claude/skills/agentic-exploration/references/agent.md`](.claude/skills/agentic-exploration/references/agent.md), same extraction logic. The `[🙋 …]` sections (`[🙋 Project name]`, `[🙋 One sentence: …]`, `[🙋 exact command]`, etc.) become interactive prompts in `-i` mode or remain as placeholders otherwise.
-3. `research_plan.md` — skeleton with: question / hypothesis, success criterion, approach, architecture sketch, milestone roadmap, out-of-scope list, external references. All sections empty with explicit `[🙋 …]` placeholders.
-4. `plan.md` + `TODO.md` — skeletons. (Could be one file with two sections; the skill is agnostic.)
-5. `notes.md` — empty with a one-paragraph header explaining its purpose (discovery log; promote stable learnings; compact weekly).
-6. `handoff.md` — empty with a one-paragraph header explaining when to write one.
-7. `.claude/skills/agentic-exploration/` — **bundled** copy of the entire skill folder. Locked decision: the project must be self-contained, so a collaborator cloning the repo without the skill installed globally still gets the workflow protocol.
+3. `.claude/skills/agentic-exploration/` — **bundled** copy of the entire skill folder (incl. `SKILL.md`, `doc-hierarchy.md`, `references/`, `templates/`). Locked decision: the project must be self-contained, so a collaborator cloning the repo without the skill installed globally still gets the workflow protocol *and* the lifecycle templates the agent will reach for later.
 
 ### Architectural patterns to reuse (do not invent new patterns)
 
@@ -114,9 +113,8 @@ Resist the urge to extend `utils/project.py`. Agentic scaffolding is a distinct 
 Do **not** make these unilaterally. Surface them, present the trade-off, let the user decide.
 
 1. **Build-time sync of the skill into bundled assets.** Options: (a) `pyproject.toml` build hook copying `.claude/skills/agentic-exploration/` → `src/siesta/boilerplate/agentic/.claude/skills/`; (b) a `Makefile` / `scripts/` target run before release; (c) keep two copies in git and add a CI check that they're identical. Each has trade-offs (build complexity vs. drift risk vs. PR noise).
-2. **Interactive mode behavior.** In `-i` mode, should the command prompt for the research question and success criterion to seed `research_plan.md`, or always leave `[🙋 …]` placeholders? Recommend: prompt only in `-i`; placeholders in non-interactive. Confirm with user.
-3. **`plan.md` and `TODO.md` — one file or two.** The skill is agnostic. siesta's existing scaffolds tend toward one file per concern; that argues for two files. Confirm.
-4. **`--remote-assets` parity.** Today `siesta docs init` supports `--remote-assets` to fetch the latest boilerplate from GitHub. Should `--explo` support the same? (Adds complexity. Recommend: not in this PR; the bundled skill is enough for v1.)
+2. **Interactive mode behavior.** In `-i` mode, should the command prompt to fill any `[🙋 …]` slots in `AGENT.md` / `Human.md` that siesta can sensibly seed (e.g. project name already known, lint/test commands inferable), or always leave them untouched? Recommend: prompt only in `-i` for the spots siesta has evidence for; placeholders otherwise. Confirm with user.
+3. **`--remote-assets` parity.** Today `siesta docs init` supports `--remote-assets` to fetch the latest boilerplate from GitHub. Should `--explo` support the same? (Adds complexity. Recommend: not in this PR; the bundled skill is enough for v1.)
 
 ---
 
@@ -124,11 +122,12 @@ Do **not** make these unilaterally. Surface them, present the trade-off, let the
 
 Before declaring Phase 2 done:
 
-1. End-to-end smoke: in a temp directory, run `siesta project quickstart --explo --name test-explo`. Confirm all 7 doc files land at the right paths, the bundled skill is present at `.claude/skills/agentic-exploration/`, and the skill's files are byte-identical to the repo's authoritative source.
+1. End-to-end smoke: in a temp directory, run `siesta project quickstart --explo --name test-explo`. Confirm exactly `Human.md`, `AGENT.md`, and the bundled `.claude/skills/agentic-exploration/` land — **and nothing else**. Confirm the bundled skill's files are byte-identical to the repo's authoritative source (incl. `templates/`).
 2. Skill discoverability: `cd test-explo` and verify the agent can invoke the skill (e.g. via `/agentic-exploration` or by triggering its description). The skill should activate exactly as it does in this repo.
 3. Placeholder preservation: grep the scaffolded `Human.md` and `AGENT.md` for `🙋` — every bracketed researcher-input spot must be intact, not plausibly filled.
 4. Existing tests still pass: `uv run pytest` (or whatever siesta uses). No regression in `docs init`, `setup-tests`, or `quickstart_project` defaults.
-5. Cross-references in scaffolded docs resolve: the `Human.md`-to-skill link, the `AGENT.md`-to-skill link, the `AGENT.md`-to-`Human.md` link.
+5. Cross-references in scaffolded docs resolve: the `Human.md`-to-skill link, the `AGENT.md`-to-skill link, the `AGENT.md`-to-`Human.md` link, and `Human.md`-to-`doc-hierarchy.md` (`.claude/skills/agentic-exploration/doc-hierarchy.md`).
+6. No premature lifecycle files: confirm `research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, `handoff.md` are **absent** from the scaffolded project. They should appear later only when the agent materializes them from `templates/` in response to real work.
 
 ---
 

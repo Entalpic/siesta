@@ -110,12 +110,25 @@ Match the form to the request. Don't generate all of these artifacts when the us
 
 ## See also
 
-- [`Human.md`](Human.md) (project root, scaffolded by `siesta project quickstart --explo`) — the full philosophy this protocol rests on.
-- [`references/doc-hierarchy.md`](references/doc-hierarchy.md) — appendix: per-layer content and maintenance rhythms.
-- [`references/agent.md`](references/agent.md) — starting `AGENT.md` for the scaffolded project.
-- [`references/human.md`](references/human.md) — starting `Human.md` for the scaffolded project.
-- [`references/research-plan-template.md`](references/research-plan-template.md) — starting `research_plan.md` (anchor layer).
-- [`references/plan-template.md`](references/plan-template.md) — starting `plan.md` (medium-grained roadmap).
-- [`references/todo-template.md`](references/todo-template.md) — starting `TODO.md` (linearized, agent-runnable contracts).
-- [`references/notes-template.md`](references/notes-template.md) — starting `notes.md` (discoveries layer).
-- [`references/handoff-template.md`](references/handoff-template.md) — starting `handoff.md` (per-session baton).
+This skill bundles three kinds of supporting files. They are **not interchangeable** — know which folder to consult for what.
+
+**Project-root philosophy** (read once at session start; reread on high-stakes work):
+
+- [`Human.md`](Human.md) — full researcher philosophy this protocol rests on. Lives at project root, scaffolded by `siesta project quickstart --explo`.
+
+**Skill appendix** (read on demand, never copied out of the skill):
+
+- [`doc-hierarchy.md`](doc-hierarchy.md) — per-layer content and maintenance rhythms for `research_plan.md` / `plan.md` / `TODO.md` / `notes.md` / `handoff.md`.
+
+**`references/` — init-time materials.** Copied verbatim (with `[🙋 …]` placeholders preserved and a couple of substitutions like project name) into the project root by `siesta project quickstart --explo`. These are what the researcher sees at `t=0`:
+
+- [`references/agent.md`](references/agent.md) — becomes `AGENT.md` at project root.
+- [`references/human.md`](references/human.md) — becomes `Human.md` at project root.
+
+**`templates/` — lifecycle materials.** **Never** copied at init. Stay inside the bundled skill. You (the agent) reach for one of these only when the researcher's real work calls for the corresponding artifact for the first time, and you scaffold it then — not before. Treat each as a starting point you adapt to the project, not a file to dump verbatim:
+
+- [`templates/research-plan-template.md`](templates/research-plan-template.md) — use when starting `research_plan.md` (anchor layer; before phase 1 begins).
+- [`templates/plan-template.md`](templates/plan-template.md) — use when starting `plan.md` (medium-grained roadmap; once `research_plan.md` has a first phase to break down).
+- [`templates/todo-template.md`](templates/todo-template.md) — use when starting `TODO.md` (linearized, agent-runnable contracts; once `plan.md` has a phase to linearize).
+- [`templates/notes-template.md`](templates/notes-template.md) — use when starting `notes.md` (discoveries layer; first time a learning is worth logging).
+- [`templates/handoff-template.md`](templates/handoff-template.md) — use when drafting `handoff.md` (per-session baton; at session end if relevant).
