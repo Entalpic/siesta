@@ -17,7 +17,7 @@ from siesta.utils.config import ROOT
 from siesta.utils.docs import _copy_not_overwrite
 
 # Path of the bundled skill within the installed siesta package, relative to ROOT.
-BUNDLED_AGENTIC_DIR = "boilerplate/agentic-exploration"
+BUNDLED_AGENTIC_DIR = "skills/agentic-exploration"
 
 # Mapping from a bundled reference template (relative to BUNDLED_AGENTIC_DIR) to
 # the file name it is materialized as at the scaffolded project's root.
@@ -199,7 +199,7 @@ def write_agentic_reference_files(
 def copy_agentic_skill(project_path: Path, overwrite: bool) -> None:
     """Copy the bundled agentic-exploration skill into the scaffolded project.
 
-    The bundled flat layout (``<package>/boilerplate/agentic-exploration/``) is
+    The bundled flat layout (``<package>/skills/agentic-exploration/``) is
     placed at ``<project_path>/.claude/skills/agentic-exploration/`` so the
     downstream agent can load it as a project-local skill.
 
