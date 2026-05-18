@@ -153,11 +153,13 @@ def quickstart_project(
         ``None`` (i.e. prompt the user).
     explo: bool, optional
         Whether to scaffold the agentic-exploration workflow (``Human.md``,
-        ``AGENT.md``, bundled ``.claude/skills/agentic-exploration/``), by
-        default ``None`` (i.e. prompt the user in interactive mode, ``False``
-        otherwise). Lifecycle docs (``research_plan.md``, ``plan.md``,
-        ``TODO.md``, ``notes.md``, ``handoff.md``) are intentionally not
-        created at init.
+        ``AGENT.md``, bundled ``.claude/skills/agentic-exploration/``). Unlike
+        the other flags, ``explo`` has no silent default: if neither
+        ``--explo`` nor ``--no-explo`` is provided the user is always
+        prompted with an explanation of what gets scaffolded, including in
+        non-interactive mode. Lifecycle docs (``research_plan.md``,
+        ``plan.md``, ``TODO.md``, ``notes.md``, ``handoff.md``) are
+        intentionally not created at init.
     """
     if as_app and as_pkg:
         logger.abort("Cannot use both --as-app and --as-pkg flags.")
@@ -194,6 +196,9 @@ def quickstart_project(
             agents = CLI_DEFAULTS["agents"]
         if explo is None:
             explo = CLI_DEFAULTS["explo"]
+        # ``explo`` intentionally has no non-interactive default: when the user
+        # passes neither ``--explo`` nor ``--no-explo`` we always prompt them
+        # later with an explanation of what the workflow scaffolds.
 
     # Prompt collection phase: gather all unresolved decisions before mutations.
     if deps is None:
@@ -330,6 +335,23 @@ def quickstart_project(
         print_summary(summary)
         logger.info("Agent assets installed.")
 
+    # Agentic exploration workflow: scaffold last so it layers on top of the
+    # project surfaces it documents (tests/docs/etc. have been decided by now).
+    # ``explo`` has no silent default: if the user passed neither ``--explo``
+    # nor ``--no-explo`` we always prompt here, with an explanation of what
+    # the workflow brings to the project.
+    if explo is None:
+        logger.info(
+            "The agentic-exploration workflow scaffolds three surfaces for "
+            "AI-assisted development:\n"
+            "  - [r]Human.md[/r]: how a human collaborates on this project.\n"
+            "  - [r]AGENT.md[/r]: how an AI agent should explore and build here.\n"
+            "  - [r].claude/skills/agentic-exploration/[/r]: a bundled skill "
+            "with templates and lifecycle docs (research_plan, plan, TODO, "
+            "notes, handoff).\n"
+            "Pass [r]--explo[/r] or [r]--no-explo[/r] to skip this prompt."
+        )
+        explo = logger.confirm("Scaffold the agentic-exploration workflow?")
     if explo:
         setup_agentic_exploration(
             project_path=Path("."),

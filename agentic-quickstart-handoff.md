@@ -40,8 +40,8 @@ Siesta substitutes only the `[🙋 …]` slots that it can derive without invent
 ## Implementation entry points
 
 - [`src/siesta/utils/agentic.py`](src/siesta/utils/agentic.py) — `setup_agentic_exploration(...)`, `render_reference_template(...)`, `copy_agentic_skill(...)`.
-- [`src/siesta/cli.py`](src/siesta/cli.py) — `quickstart_project()` exposes the `--explo` flag.
-- [`src/siesta/utils/config.py`](src/siesta/utils/config.py) — `CLI_DEFAULTS["explo"] = False`.
+- [`src/siesta/cli.py`](src/siesta/cli.py) — `quickstart_project()` exposes the `--explo` flag. When neither `--explo` nor `--no-explo` is passed the user is always prompted with an explanation of what gets scaffolded (no silent default, even in non-interactive mode).
+- [`src/siesta/utils/config.py`](src/siesta/utils/config.py) — `CLI_DEFAULTS` intentionally does **not** carry an `"explo"` entry: the flag is prompt-or-pass, never silently defaulted.
 - [`tests/test_utils/test_agentic_utils.py`](tests/test_utils/test_agentic_utils.py) and [`tests/test_cli/test_quickstart_project.py`](tests/test_cli/test_quickstart_project.py) — coverage.
 
 ## Retrofit command

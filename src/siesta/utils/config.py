@@ -49,4 +49,7 @@ CLI_DEFAULTS = {
 - ``explo``: Whether to scaffold the agentic-exploration workflow
   (``Human.md`` / ``AGENT.md`` / bundled skill), by default ``False`` —
   opt-in via ``--explo``.
+
+Note: ``explo`` is intentionally absent — it has no silent default and is
+always prompted unless the user passes ``--explo`` or ``--no-explo``.
 """
