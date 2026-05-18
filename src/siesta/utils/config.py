@@ -33,6 +33,7 @@ CLI_DEFAULTS = {
     "actions": True,
     "gitignore": True,
     "agents": True,
+    "explo": False,
 }
 """Default values for the CLI when not in ``interactive`` mode.
 
@@ -45,4 +46,7 @@ CLI_DEFAULTS = {
 - ``actions``: Whether to initialize GitHub Actions, by default ``True``.
 - ``gitignore``: Whether to initialize the ``.gitignore`` file, by default ``True``.
 - ``agents``: Whether to install recommended agent assets (skills/rules/constitution), by default ``True``.
+- ``explo``: Whether to scaffold the agentic-exploration workflow
+  (``Human.md`` / ``AGENT.md`` / bundled skill), by default ``False`` —
+  opt-in via ``--explo``.
 """

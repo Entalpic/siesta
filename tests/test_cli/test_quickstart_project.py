@@ -109,6 +109,75 @@ def test_quickstart_respects_no_actions(tmp_path_chdir, capture_output):
     assert not Path(tmp_path_chdir, ".github").exists()
 
 
+def test_quickstart_without_explo_creates_no_agentic_files(
+    tmp_path_chdir, capture_output
+):
+    """Default `siesta project quickstart` (no --explo) must not create agentic surfaces."""
+
+    with capture_output():
+        try:
+            app(["project", "quickstart"])
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert not Path(tmp_path_chdir, "Human.md").exists()
+    assert not Path(tmp_path_chdir, "AGENT.md").exists()
+    assert not Path(tmp_path_chdir, ".claude").exists()
+
+
+def test_quickstart_explo_creates_agentic_surface(tmp_path_chdir, capture_output):
+    """`--explo` materializes Human.md, AGENT.md, and the bundled skill — no lifecycle files."""
+
+    with capture_output() as output:
+        try:
+            app(
+                [
+                    "project",
+                    "quickstart",
+                    "--explo",
+                    "--no-docs",
+                    "--no-tests",
+                    "--no-actions",
+                    "--no-precommit",
+                    "--no-deps",
+                    "--no-ipdb",
+                    "--no-gitignore",
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert "Failed to build the docs" not in output.getvalue()
+
+    # Init-time surface.
+    assert Path(tmp_path_chdir, "Human.md").exists()
+    assert Path(tmp_path_chdir, "AGENT.md").exists()
+    skill_dir = Path(tmp_path_chdir, ".claude", "skills", "agentic-exploration")
+    assert (skill_dir / "SKILL.md").exists()
+    assert (skill_dir / "doc-hierarchy.md").exists()
+    assert (skill_dir / "references" / "human.md").exists()
+    assert (skill_dir / "references" / "agent.md").exists()
+    assert (skill_dir / "templates").is_dir()
+
+    # No lifecycle files at init.
+    for lifecycle in (
+        "research_plan.md",
+        "plan.md",
+        "TODO.md",
+        "notes.md",
+        "handoff.md",
+    ):
+        assert not Path(tmp_path_chdir, lifecycle).exists(), (
+            f"lifecycle file {lifecycle} must not be created at init"
+        )
+
+    # Project name substituted in AGENT.md.
+    agent_text = Path(tmp_path_chdir, "AGENT.md").read_text()
+    assert f"# {tmp_path_chdir.name}" in agent_text
+    # Researcher-owned placeholders preserved.
+    assert "🙋" in agent_text
+
+
 def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_output):
     """Test that user flags take precedence (both --no-tests and --no-actions)."""
 

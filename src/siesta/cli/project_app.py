@@ -9,6 +9,7 @@ from typing import Annotated
 from cyclopts import App, Parameter
 from gitignore_parser import parse_gitignore
 
+from siesta.utils.agentic import setup_agentic_exploration
 from siesta.utils.agents import install_quickstart, print_summary
 from siesta.utils.common import (
     get_project_name,
@@ -62,6 +63,7 @@ def quickstart_project(
     actions: bool | None = None,
     gitignore: bool | None = None,
     agents: bool | None = None,
+    explo: Annotated[bool | None, Parameter(name=["--explo"])] = None,
 ):
     """Start a ``uv``-based Python project from scratch, with initial project structure and docs.
 
@@ -149,6 +151,13 @@ def quickstart_project(
     agents : bool, optional
         Whether to install recommended agent assets (skills/rules/constitution), by default
         ``None`` (i.e. prompt the user).
+    explo: bool, optional
+        Whether to scaffold the agentic-exploration workflow (``Human.md``,
+        ``AGENT.md``, bundled ``.claude/skills/agentic-exploration/``), by
+        default ``None`` (i.e. prompt the user in interactive mode, ``False``
+        otherwise). Lifecycle docs (``research_plan.md``, ``plan.md``,
+        ``TODO.md``, ``notes.md``, ``handoff.md``) are intentionally not
+        created at init.
     """
     if as_app and as_pkg:
         logger.abort("Cannot use both --as-app and --as-pkg flags.")
@@ -183,6 +192,8 @@ def quickstart_project(
             gitignore = CLI_DEFAULTS["gitignore"]
         if agents is None:
             agents = CLI_DEFAULTS["agents"]
+        if explo is None:
+            explo = CLI_DEFAULTS["explo"]
 
     # Prompt collection phase: gather all unresolved decisions before mutations.
     if deps is None:
@@ -212,6 +223,14 @@ def quickstart_project(
 
     if agents is None:
         agents = logger.confirm("Would you like to install recommended agent assets?")
+
+    # Agentic exploration workflow: scaffold last so it layers on top of the
+    # project surfaces it documents (tests/docs/etc. have been decided by now).
+    if explo is None:
+        explo = logger.confirm(
+            "Would you like to scaffold the agentic-exploration workflow "
+            "(Human.md, AGENT.md, bundled skill)?"
+        )
 
     docs_with_uv: bool | None = None
     if docs and deps:
@@ -310,6 +329,15 @@ def quickstart_project(
         )
         print_summary(summary)
         logger.info("Agent assets installed.")
+
+    if explo:
+        setup_agentic_exploration(
+            project_path=Path("."),
+            project_name=project_name,
+            tests=bool(tests),
+            docs=bool(docs),
+            overwrite=overwrite,
+        )
 
     tree_project(".")
     logger.info("Project initialized.")

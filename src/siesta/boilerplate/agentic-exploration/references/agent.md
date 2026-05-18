@@ -36,7 +36,7 @@ Read in this order when picking up the project. The researcher's reading order s
 This project was scaffolded by `siesta project quickstart --explo`. Defaults may differ if the quickstart used app/package variants or disabled optional surfaces; correct this section before assigning implementation work.
 
 - `pyproject.toml` / `uv.lock` — uv-managed Python project metadata and locked dependencies.
-- `src/[pkg]/` — default siesta library layout. [🙋 Brief one-liner per top-level module.]
+- `src/[🙋 package name]/` — default siesta library layout. [🙋 Brief one-liner per top-level module.]
 - `tests/` — pytest infrastructure, if enabled by quickstart.
 - `docs/` — Sphinx documentation, if enabled by quickstart.
 - `.github/workflows/test.yml` — GitHub Actions test workflow, if enabled by quickstart.
@@ -47,10 +47,10 @@ This project was scaffolded by `siesta project quickstart --explo`. Defaults may
 ## Commands
 
 - Setup: `uv sync`
-- Test: `uv run pytest`
+- Test: `[🙋 test command]`
 - Lint: `uv run ruff check .`
 - Format: `uv run ruff format .`
-- Docs: `siesta docs build` if docs exist, `siesta docs init` if no docs
+- Docs: `[🙋 docs command]`
 - Run main experiment / analysis: `[🙋 exact command or delete line]`
 - Evaluate: `[🙋 exact command or delete line]`
 
