@@ -3,7 +3,7 @@
 # Custom
 .vscode/
 .DS_Store
-.todo
+.todo*
 plans/
 
 # Byte-compiled / optimized / DLL files
