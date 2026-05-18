@@ -44,9 +44,14 @@ Siesta substitutes only the `[🙋 …]` slots that it can derive without invent
 - [`src/siesta/utils/config.py`](src/siesta/utils/config.py) — `CLI_DEFAULTS["explo"] = False`.
 - [`tests/test_utils/test_agentic_utils.py`](tests/test_utils/test_agentic_utils.py) and [`tests/test_cli/test_quickstart_project.py`](tests/test_cli/test_quickstart_project.py) — coverage.
 
+## Retrofit command
+
+`siesta project add-skill agentic-exploration` retrofits the workflow into an existing project. It detects `tests/` and `docs/` from the filesystem so the rendered `AGENT.md` only documents commands that actually exist, then calls the same [`setup_agentic_exploration()`](src/siesta/utils/agentic.py) as `--explo`. See [`src/siesta/cli.py`](src/siesta/cli.py) and [`tests/test_cli/test_add_skill.py`](tests/test_cli/test_add_skill.py).
+
+Today only `agentic-exploration` is a supported skill; the validation lives in `SUPPORTED_SKILLS` in [`src/siesta/cli.py`](src/siesta/cli.py) — adding a new skill is a one-line change.
+
 ## Deferred follow-ups
 
-- `siesta project add-skill agentic-exploration` — retrofit command. Listed in `.todo` for a separate build.
 - `siesta project quickstart --prod` — production-style quickstart preset.
-- `siesta project setup-agentic-workflow` — retrofit-the-whole-workflow command.
+- `siesta project setup-agentic-workflow` — retrofit-the-whole-workflow command (broader scope than `add-skill`).
 - The `pyproject.toml` sdist include line (`src/boilerplate/*`) looks stale relative to actual layout (`src/siesta/boilerplate/`). Wheels are unaffected and ship correctly. Worth a separate fix.

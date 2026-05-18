@@ -446,6 +446,71 @@ def setup_tests(
     logger.success("Testing infrastructure set up successfully.")
 
 
+# Skills that `siesta project add-skill <name>` can retrofit into an existing
+# project. Kept as a set so adding a new skill is a one-line change.
+SUPPORTED_SKILLS = {"agentic-exploration"}
+
+
+@project_app.command(name="add-skill")
+def add_skill(
+    skill: str,
+    overwrite: bool = False,
+):
+    """Retrofit a siesta-bundled skill into an existing project.
+
+    Today only ``agentic-exploration`` is supported: it materializes
+    ``Human.md``, ``AGENT.md``, and ``.claude/skills/agentic-exploration/`` into
+    the current directory. The presence of ``tests/`` and ``docs/`` is detected
+    from the filesystem so the scaffolded ``AGENT.md`` only documents commands
+    that actually exist in the retrofitted project.
+
+    Lifecycle documents (``research_plan.md``, ``plan.md``, ``TODO.md``,
+    ``notes.md``, ``handoff.md``) are intentionally not created — the agent
+    materializes them from the bundled ``templates/`` only when real work calls
+    for them.
+
+    Example
+    -------
+    .. code-block:: bash
+
+        # Retrofit the agentic-exploration workflow into the current project.
+        $ cd path/to/existing/project
+        $ siesta project add-skill agentic-exploration
+
+        # Overwrite existing Human.md / AGENT.md if they already exist
+        # (otherwise the existing files are backed up).
+        $ siesta project add-skill agentic-exploration --overwrite
+
+    Parameters
+    ----------
+    skill : str
+        The name of the bundled skill to install. Currently only
+        ``agentic-exploration`` is supported.
+    overwrite : bool, optional
+        Whether to overwrite existing files at the destination, by default
+        ``False`` (existing files are backed up via ``.bak``).
+    """
+    if skill not in SUPPORTED_SKILLS:
+        supported = ", ".join(sorted(SUPPORTED_SKILLS))
+        logger.abort(f"Unknown skill '{skill}'. Supported skills: {supported}.", exit=1)
+
+    # Detect the project name from pyproject.toml (or fall back to the
+    # directory name) and detect optional surfaces from the filesystem so the
+    # rendered AGENT.md matches what's actually there.
+    project_name = get_project_name(interactive=False)
+    tests = Path("tests").is_dir()
+    docs = Path("docs").is_dir()
+
+    setup_agentic_exploration(
+        project_path=Path("."),
+        project_name=project_name,
+        tests=tests,
+        docs=docs,
+        overwrite=overwrite,
+    )
+    logger.success(f"Skill '{skill}' installed.")
+
+
 @project_app.command(name="tree")
 def tree_project(path: str = ".", ignore_from_gitignore: bool = True):
     """Show a project's tree, i.e. its directory structure.
