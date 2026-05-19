@@ -10,7 +10,7 @@ def test_quickstart_project(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         try:
-            app(["project", "quickstart"])
+            app(["project", "quickstart", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -36,7 +36,7 @@ def test_quickstart_project_as_app(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         try:
-            app(["project", "quickstart", "--as-app"])
+            app(["project", "quickstart", "--as-app", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -52,7 +52,7 @@ def test_quickstart_project_as_pkg(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         try:
-            app(["project", "quickstart", "--as-pkg"])
+            app(["project", "quickstart", "--as-pkg", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -67,7 +67,7 @@ def test_quickstart_respects_no_tests(tmp_path_chdir, capture_output):
     with capture_output() as output:
         # User specifies --no-tests, defaults should not override it
         try:
-            app(["project", "quickstart", "--no-tests"])
+            app(["project", "quickstart", "--no-tests", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -95,7 +95,7 @@ def test_quickstart_respects_no_actions(tmp_path_chdir, capture_output):
     with capture_output() as output:
         # User specifies --no-actions, defaults should not override it
         try:
-            app(["project", "quickstart", "--no-actions"])
+            app(["project", "quickstart", "--no-actions", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -116,7 +116,7 @@ def test_quickstart_without_explo_creates_no_agentic_files(
 
     with capture_output():
         try:
-            app(["project", "quickstart"])
+            app(["project", "quickstart", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -190,6 +190,7 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
                     "quickstart",
                     "--no-tests",
                     "--no-actions",
+                    "--no-explo",
                 ]
             )
         except SystemExit as e:
