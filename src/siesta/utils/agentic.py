@@ -264,6 +264,11 @@ def render_reference_template(
     for line in text.splitlines(keepends=True):
         # A drop placeholder anywhere on the line removes the whole line — used when
         # a feature like tests/docs was disabled at quickstart time.
+        # IMPORTANT for template authors: do NOT use a drop-eligible placeholder
+        # (e.g. [🙋 test command]) in a prose sentence on its own line — the entire
+        # line would be silently deleted.  Drop placeholders must appear only on
+        # lines that are entirely dedicated to that feature (e.g. a bullet or
+        # a single-purpose instruction line).
         if any(ph in line for ph in drop_placeholders):
             continue
         for ph, val in fill_placeholders.items():

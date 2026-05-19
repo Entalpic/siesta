@@ -8,7 +8,7 @@ This file is *yours*. The operational protocol the agent enforces lives separate
 
 1. Read the manifesto end-to-end.
 2. Fill in the `[🙋 …]`-marked placeholders across this file.
-2. Don't let the agent edit this file without your sign-off. It's your manifesto, not its protocol.
+3. Don't let the agent edit this file without your sign-off. It's your manifesto, not its protocol.
 
 ## What does *not* go in `Human.md`
 
