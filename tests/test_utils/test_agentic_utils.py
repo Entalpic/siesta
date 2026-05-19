@@ -143,3 +143,39 @@ def test_setup_agentic_exploration_accepts_str_path(tmp_path: Path):
         docs=True,
     )
     assert (tmp_path / "AGENT.md").exists()
+
+
+def test_build_substitutions_lib_layout_keeps_src_lines():
+    subs = _build_substitutions("foo", tests=True, docs=True, layout="lib")
+    # lib layout: src-layout-line marker replaced with "" (not None).
+    assert subs["[🙋 src-layout-line]"] == ""
+
+
+def test_build_substitutions_pkg_layout_keeps_src_lines():
+    subs = _build_substitutions("foo", tests=True, docs=True, layout="pkg")
+    assert subs["[🙋 src-layout-line]"] == ""
+
+
+def test_build_substitutions_app_layout_drops_src_lines():
+    subs = _build_substitutions("foo", tests=True, docs=True, layout="app")
+    assert subs["[🙋 src-layout-line]"] is None
+
+
+def test_write_agentic_reference_files_app_layout_drops_src_lines(tmp_path):
+    subs = _build_substitutions("my-app", tests=True, docs=False, layout="app")
+    write_agentic_reference_files(tmp_path, subs, overwrite=False)
+
+    agent_text = (tmp_path / "AGENT.md").read_text()
+    # app layout: src/ lines must be absent.
+    assert "src/my_app/" not in agent_text
+    assert "Always run tests after any change to `src/`" not in agent_text
+
+
+def test_write_agentic_reference_files_lib_layout_keeps_src_lines(tmp_path):
+    subs = _build_substitutions("my-lib", tests=True, docs=False, layout="lib")
+    write_agentic_reference_files(tmp_path, subs, overwrite=False)
+
+    agent_text = (tmp_path / "AGENT.md").read_text()
+    # lib layout: src/ lines must be present.
+    assert "src/my_lib/" in agent_text
+    assert "Always run tests after any change to `src/`" in agent_text

@@ -55,6 +55,7 @@ def _build_substitutions(
     *,
     tests: bool,
     docs: bool,
+    layout: str = "lib",
 ) -> dict[str, str | None]:
     """Build the placeholder-substitution table for siesta-known slots.
 
@@ -72,6 +73,10 @@ def _build_substitutions(
     docs : bool
         Whether docs were scaffolded. Controls whether the ``[🙋 docs command]``
         line is filled or dropped.
+    layout : str, optional
+        Project layout mode: ``"lib"`` (default src-layout library), ``"pkg"``
+        (src-layout package), or ``"app"`` (no ``src/`` directory). Controls
+        whether lines tagged ``[🙋 src-layout-line]`` are kept or dropped.
 
     Returns
     -------
@@ -83,9 +88,12 @@ def _build_substitutions(
     --------
     .. code-block:: python
 
-        _build_substitutions("my-proj", tests=True, docs=False)
-        # {"[🙋 Project name]": "my-proj", "[🙋 package name]": "my_proj", ...}
+        _build_substitutions("my-proj", tests=True, docs=False, layout="app")
+        # {"[🙋 Project name]": "my-proj", "[🙋 src-layout-line]": None, ...}
     """
+    # For app layout, drop lines tagged with [🙋 src-layout-line] (no src/ dir).
+    # For lib/pkg, replace the marker with "" so the line renders normally.
+    src_layout_line: str | None = None if layout == "app" else ""
     return {
         "[🙋 Project name]": project_name,
         "[🙋 package name]": _normalize_package_name(project_name),
@@ -95,6 +103,7 @@ def _build_substitutions(
             if docs
             else None
         ),
+        "[🙋 src-layout-line]": src_layout_line,
     }
 
 
@@ -239,6 +248,7 @@ def setup_agentic_exploration(
     tests: bool,
     docs: bool,
     overwrite: bool = False,
+    layout: str = "lib",
 ) -> None:
     """Materialize the agentic-exploration workflow into ``project_path``.
 
@@ -265,6 +275,10 @@ def setup_agentic_exploration(
     overwrite : bool, optional
         Whether to overwrite existing files at the destination. Defaults to
         ``False``, in which case existing files are backed up.
+    layout : str, optional
+        Project layout mode: ``"lib"`` (default), ``"pkg"``, or ``"app"``.
+        Passed to ``_build_substitutions`` to control whether ``src/``-specific
+        lines are included in the rendered ``AGENT.md``.
 
     Examples
     --------
@@ -278,10 +292,11 @@ def setup_agentic_exploration(
             project_name="my-project",
             tests=True,
             docs=False,
+            layout="app",
         )
     """
     project_path = resolve_path(project_path)
-    substitutions = _build_substitutions(project_name, tests=tests, docs=docs)
+    substitutions = _build_substitutions(project_name, tests=tests, docs=docs, layout=layout)
     write_agentic_reference_files(project_path, substitutions, overwrite)
     copy_agentic_skill(project_path, overwrite)
     logger.info(

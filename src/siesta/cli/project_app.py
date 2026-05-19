@@ -360,12 +360,14 @@ def quickstart_project(
             # Non-interactive: default to scaffolding the workflow.
             explo = True
     if explo:
+        layout = "app" if as_app else "pkg" if as_pkg else "lib"
         setup_agentic_exploration(
             project_path=Path("."),
             project_name=project_name,
             tests=bool(tests),
             docs=bool(docs),
             overwrite=overwrite,
+            layout=layout,
         )
 
     tree_project(".")
@@ -529,6 +531,8 @@ def add_skill(
     project_name = get_project_name(interactive=False)
     tests = Path("tests").is_dir()
     docs = Path("docs").is_dir()
+    # Infer layout: absence of src/ signals an app-mode project.
+    layout = "lib" if Path("src").is_dir() else "app"
 
     setup_agentic_exploration(
         project_path=Path("."),
@@ -536,6 +540,7 @@ def add_skill(
         tests=tests,
         docs=docs,
         overwrite=overwrite,
+        layout=layout,
     )
     logger.success(f"Skill '{skill}' installed.")
 

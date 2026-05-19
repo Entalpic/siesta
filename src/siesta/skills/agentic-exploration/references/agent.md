@@ -36,7 +36,7 @@ Read in this order when picking up the project. The researcher's reading order s
 This project was scaffolded by `siesta project quickstart --explo`. Defaults may differ if the quickstart used app/package variants or disabled optional surfaces; correct this section before assigning implementation work.
 
 - `pyproject.toml` / `uv.lock` — uv-managed Python project metadata and locked dependencies.
-- `src/[🙋 package name]/` — default siesta library layout. [🙋 Brief one-liner per top-level module.]
+- `src/[🙋 package name]/` — source directory (`src`-layout). [🙋 Brief one-liner per top-level module.][🙋 src-layout-line]
 - `tests/` — pytest infrastructure, if enabled by quickstart.
 - `docs/` — Sphinx documentation, if enabled by quickstart.
 - `.github/workflows/test.yml` — GitHub Actions test workflow, if enabled by quickstart.
@@ -54,7 +54,7 @@ This project was scaffolded by `siesta project quickstart --explo`. Defaults may
 - Run main experiment / analysis: `[🙋 exact command or delete line]`
 - Evaluate: `[🙋 exact command or delete line]`
 
-Always run tests after any change to `src/`. Don't ask, just run them.
+Always run tests after any change to `src/`. Don't ask, just run them.[🙋 src-layout-line]
 
 ## Style and error handling
 
