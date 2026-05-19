@@ -1,5 +1,5 @@
 # Copyright 2025 Entalpic
-from siesta.utils.common import safe_load
+from siesta.utils.common import get_project_name, safe_load
 from siesta.utils.project import (
     add_ipdb_as_debugger,
     write_gitignore,
@@ -66,3 +66,21 @@ def test_add_ipdb_as_debugger_no_init(tmp_path_chdir, capture_output):
     with capture_output() as output:
         add_ipdb_as_debugger()
     assert "No __init__.py files found. Skipping ipdb debugger." in output.getvalue()
+
+
+def test_get_project_name_reads_pyproject(tmp_path_chdir):
+    (tmp_path_chdir / "pyproject.toml").write_text('[project]\nname = "my-cool-proj"\n')
+    assert get_project_name() == "my-cool-proj"
+
+
+def test_get_project_name_missing_name_field_falls_back_to_dir(tmp_path_chdir):
+    # pyproject.toml exists but has no `name` key — must not raise AttributeError.
+    (tmp_path_chdir / "pyproject.toml").write_text("[project]\n# no name here\n")
+    result = get_project_name()
+    assert result == tmp_path_chdir.name
+
+
+def test_get_project_name_no_pyproject_falls_back_to_dir(tmp_path_chdir):
+    # No pyproject.toml at all — fall back to directory name.
+    result = get_project_name()
+    assert result == tmp_path_chdir.name
