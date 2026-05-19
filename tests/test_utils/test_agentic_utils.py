@@ -26,8 +26,7 @@ def test_build_substitutions_fills_known_slots():
     assert subs["[🙋 Project name]"] == "foo-bar"
     assert subs["[🙋 package name]"] == "foo_bar"
     assert subs["[🙋 test command]"] == "uv run pytest"
-    # docs command line is non-empty (exact wording is implementation detail).
-    assert subs["[🙋 docs command]"]
+    assert subs["[🙋 docs command]"] == "`siesta docs build`"
 
 
 def test_build_substitutions_drops_lines_when_feature_disabled():

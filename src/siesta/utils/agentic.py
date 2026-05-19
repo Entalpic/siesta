@@ -212,11 +212,9 @@ def _build_substitutions(
         "[🙋 Project name]": project_name,
         "[🙋 package name]": _normalize_package_name(project_name),
         "[🙋 test command]": "uv run pytest" if tests else None,
-        "[🙋 docs command]": (
-            "`siesta docs build` if docs exist, `siesta docs init` if no docs"
-            if docs
-            else None
-        ),
+        # When docs infrastructure is present, `siesta docs build` is the
+        # correct daily command; `siesta docs init` is only for first-time setup.
+        "[🙋 docs command]": "`siesta docs build`" if docs else None,
         "[🙋 src-layout-line]": src_layout_line,
     }
 
