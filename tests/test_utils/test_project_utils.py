@@ -39,7 +39,7 @@ def test_write_tests_infra_already_exists(tmp_path_chdir, capture_output):
     assert not (tmp_path_chdir / "tests" / "test_import.py").exists()
 
 
-def test_write_gitignore_includes_agent_plans(tmp_path_chdir, monkeypatch):
+def test_write_gitignore_includes_agent_plans_and_claude_settings(tmp_path_chdir, monkeypatch):
     monkeypatch.setattr(
         "siesta.utils.project.download_python_gitignore", lambda: "*.pyc\n"
     )
@@ -48,6 +48,7 @@ def test_write_gitignore_includes_agent_plans(tmp_path_chdir, monkeypatch):
 
     txt = (tmp_path_chdir / ".gitignore").read_text()
     assert "plans/" in txt
+    assert ".claude/settings.json" in txt
     assert "*.pyc" in txt
 
 

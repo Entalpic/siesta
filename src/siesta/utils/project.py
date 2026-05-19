@@ -194,5 +194,6 @@ def write_gitignore() -> None:
     .vscode/
     .DS_Store
     plans/
+    .claude/settings.json
     """)
     gitignore_path.write_text(gitignore + python_gitignore)
