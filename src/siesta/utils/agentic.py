@@ -424,6 +424,13 @@ def setup_agentic_exploration(
         )
     """
     project_path = resolve_path(project_path)
+    # Enforce that the target is an existing directory, not a relative escape
+    # or arbitrary absolute path outside the intended project tree.
+    if not project_path.is_dir():
+        raise ValueError(
+            f"project_path '{project_path}' is not an existing directory. "
+            "Pass the root directory of the target project."
+        )
     # Sanitize before any template substitution to prevent prompt injection via
     # a crafted pyproject.toml name field.
     project_name = _sanitize_project_name(project_name)
