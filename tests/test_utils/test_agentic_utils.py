@@ -186,6 +186,27 @@ def test_write_agentic_reference_files_lib_layout_keeps_src_lines(tmp_path):
 # --- symlink-safety tests ---
 
 
+def test_copy_agentic_skill_fails_when_exists_without_overwrite(tmp_path):
+    # First install succeeds.
+    copy_agentic_skill(tmp_path, overwrite=False)
+    # Re-run without --overwrite must fail with guidance.
+    with pytest.raises(FileExistsError, match="--overwrite"):
+        copy_agentic_skill(tmp_path, overwrite=False)
+
+
+def test_copy_agentic_skill_overwrites_fully_when_requested(tmp_path):
+    # First install.
+    copy_agentic_skill(tmp_path, overwrite=False)
+    skill_dir = tmp_path / ".claude" / "skills" / "agentic-exploration"
+    # Plant a stale file that should be removed on full sync.
+    stale = skill_dir / "stale-old-file.md"
+    stale.write_text("old content")
+    # Re-run with --overwrite must remove stale files.
+    copy_agentic_skill(tmp_path, overwrite=True)
+    assert not stale.exists(), "stale file must be removed on full sync"
+    assert (skill_dir / "SKILL.md").exists(), "bundled files must be present after sync"
+
+
 def test_write_agentic_reference_files_refuses_symlinked_dest(tmp_path):
     # If Human.md is a symlink, write must be refused.
     target = tmp_path / "elsewhere.md"

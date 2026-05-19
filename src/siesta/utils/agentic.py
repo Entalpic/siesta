@@ -10,13 +10,13 @@ intentionally not created at init — the agent materializes them from
 """
 
 import re
+import shutil
 from pathlib import Path
 from shutil import copy2, copytree
 from typing import Callable
 
 from siesta.utils.common import logger, resolve_path
 from siesta.utils.config import ROOT
-from siesta.utils.docs import _copy_not_overwrite
 
 # Path of the bundled skill within the installed siesta package, relative to ROOT.
 BUNDLED_AGENTIC_DIR = "skills/agentic-exploration"
@@ -334,9 +334,10 @@ def copy_agentic_skill(project_path: Path, overwrite: bool) -> None:
     project_path : Path
         The root directory of the scaffolded project.
     overwrite : bool
-        Whether to overwrite existing destination files. If ``False``, each
-        existing file is backed up before being replaced (via
-        :func:`siesta.utils.docs._copy_not_overwrite`).
+        Whether to overwrite an existing skill tree. If ``False`` and the
+        destination already exists, a :exc:`FileExistsError` is raised with
+        instructions to re-run with ``--overwrite``. If ``True``, the existing
+        tree is removed before copying to ensure a clean full sync.
 
     Examples
     --------
@@ -357,15 +358,25 @@ def copy_agentic_skill(project_path: Path, overwrite: bool) -> None:
         dest_root,
     ):
         _assert_not_symlink(check_path, str(check_path.relative_to(project_path)))
+
+    if dest_root.exists() and not overwrite:
+        raise FileExistsError(
+            f"Skill tree already exists at '{dest_root}'. "
+            "Re-run with --overwrite to replace it with the current bundled version."
+        )
+
     dest_root.parent.mkdir(parents=True, exist_ok=True)
-    base_copy = copy2 if overwrite else _copy_not_overwrite
+
+    if overwrite and dest_root.exists():
+        # Full sync: remove the existing tree so stale files from previous
+        # versions of the bundled skill don't persist.
+        shutil.rmtree(dest_root)
+
     copytree(
         src_root,
         dest_root,
         dirs_exist_ok=True,
-        # Wrap the copy function to refuse symlinked destination files within
-        # the skill tree (prevents per-file escape via pre-placed symlinks).
-        copy_function=_symlink_safe_copy(base_copy),
+        copy_function=_symlink_safe_copy(copy2),
     )
 
 
