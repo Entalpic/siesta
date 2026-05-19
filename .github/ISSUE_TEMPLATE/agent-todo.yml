@@ -1,0 +1,41 @@
+name: Agent TODO
+description: Agent-actionable work item (auto-labeled agent:todo). Requires branch intent.
+title: "[agent todo] "
+labels:
+  - agent:todo
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for work the agent should pick up. The **Branch** field is mandatory.
+
+        - **`new`** — the agent derives a conventional branch name from this issue, creates the branch from the default branch, and works in a **dedicated worktree**.
+        - **`existing`** — work continues on a branch that already exists; you must name it below.
+
+  - type: dropdown
+    id: branch_mode
+    attributes:
+      label: Branch
+      description: Where should implementation happen?
+      options:
+        - new
+        - existing
+    validations:
+      required: true
+
+  - type: input
+    id: branch_name
+    attributes:
+      label: Existing branch name
+      description: |
+        Required when Branch is **existing**. Remote branch name only (no `origin/` prefix), e.g. `feat-agentic-research-workflow`.
+        Leave blank when Branch is **new**.
+      placeholder: feat-my-feature
+
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: What to do, constraints, acceptance criteria, and links.
+    validations:
+      required: true
