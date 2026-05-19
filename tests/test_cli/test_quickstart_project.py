@@ -109,10 +109,10 @@ def test_quickstart_respects_no_actions(tmp_path_chdir, capture_output):
     assert not Path(tmp_path_chdir, ".github").exists()
 
 
-def test_quickstart_without_explo_creates_no_agentic_files(
+def test_quickstart_with_no_explo_creates_no_agentic_files(
     tmp_path_chdir, capture_output
 ):
-    """Default `siesta project quickstart` (no --explo) must not create agentic surfaces."""
+    """Explicit --no-explo must not create agentic surfaces."""
 
     with capture_output():
         try:
@@ -123,6 +123,38 @@ def test_quickstart_without_explo_creates_no_agentic_files(
     assert not Path(tmp_path_chdir, "Human.md").exists()
     assert not Path(tmp_path_chdir, "AGENT.md").exists()
     assert not Path(tmp_path_chdir, ".claude").exists()
+
+
+def test_quickstart_default_explo_in_non_interactive_creates_agentic_files(
+    tmp_path_chdir, capture_output, monkeypatch
+):
+    """No --explo / --no-explo in non-interactive env defaults to explo=True."""
+    import sys
+
+    # Simulate non-interactive (piped) stdin — isatty() returns False.
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+
+    with capture_output():
+        try:
+            app(
+                [
+                    "project",
+                    "quickstart",
+                    "--no-docs",
+                    "--no-tests",
+                    "--no-actions",
+                    "--no-precommit",
+                    "--no-deps",
+                    "--no-ipdb",
+                    "--no-gitignore",
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert Path(tmp_path_chdir, "Human.md").exists()
+    assert Path(tmp_path_chdir, "AGENT.md").exists()
+    assert Path(tmp_path_chdir, ".claude", "skills", "agentic-exploration").exists()
 
 
 def test_quickstart_explo_creates_agentic_surface(tmp_path_chdir, capture_output):

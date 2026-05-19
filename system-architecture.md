@@ -151,6 +151,16 @@ relevant sections here:
 | [0003](docs/adr/0003-secret-handling-policy.md) | Secret Handling Policy | PAT handling in `self_app` / `github` |
 | [0004](docs/adr/0004-cross-provider-agent-assets.md) | Cross-Provider Agent Asset Installation | Providers, Asset Scope, Mirroring |
 
+The `--explo` flag is an exception: it has no entry in `CLI_DEFAULTS`. When neither `--explo` nor `--no-explo` is supplied, the behavior depends on the terminal:
+- **Interactive TTY** (`sys.stdin.isatty()` is `True`): the user is prompted with an explanation of the workflow surfaces.
+- **Non-interactive / piped** (`sys.stdin.isatty()` is `False`): defaults to `True` so CI or scripted runs are never blocked on `EOFError`.
+
+```python
+if not interactive:
+    if deps is None:
+        deps = CLI_DEFAULTS["deps"]   # defaults to True
+```
+
 ## Core Concepts
 
 ### The Command Lifecycle (Ordering Contract)
@@ -335,6 +345,17 @@ flowchart TD
 The flow embodies the Ordering Contract end-to-end: nothing under "Execution" runs until
 every decision above it is fixed, and delegated sub-commands receive explicit values.
 
+### Agentic Exploration Workflow
+
+`setup_agentic_exploration()` in `utils/agentic.py` is the core of the agentic scaffolding path:
+
+1. Builds a substitution table from project name, `tests` flag, and `docs` flag.
+2. Calls `write_agentic_reference_files()` which renders `references/human.md` and `references/agent.md` from the bundled skill and writes them as `Human.md` / `AGENT.md` at the project root.
+3. Calls `copy_agentic_skill()` which copies the entire bundled `skills/agentic-exploration/` tree into `.claude/skills/agentic-exploration/`.
+
+The same function is called by both `quickstart_project` (line-up: scaffold last, after tests/docs surfaces are decided) and `add_skill agentic-exploration` (retrofitting an existing project).
+
+
 ### Agent-asset install (conflict resolution)
 
 For each `(provider, scope)` destination, `write_file`/`write_dir` call `_decide_action`.
@@ -381,4 +402,15 @@ existing `CLAUDE.md` by prepending `@AGENTS.md` instead of clobbering.
   fail-closed confirmation.
 - **`bool | None` flag convention.** A uniform, framework-friendly encoding of
   "unspecified vs. explicitly set" that powers Input Precedence without bespoke parsing.
-```
+
+**Single-module CLI**: All command definitions live in `cli.py`. This makes the command surface immediately discoverable without tracing imports. The trade-off is a ~1300-line file; this is acceptable because commands are thin and the file is organized in clear sections.
+
+**Functions as commands, not classes**: cyclopts decorates plain functions rather than method classes. This avoids ceremony and matches the stateless nature of scaffolding operations. Each command is fully self-contained.
+
+**`requests` for gitignore only**: `utils/project.py` imports `requests` to download the Python gitignore template, while all other HTTP access goes through PyGithub or `urllib.request`. This inconsistency reflects organic growth — `requests` should likely be replaced with `urllib.request` to eliminate the dependency, or the gitignore fetch should be bundled.
+
+**Boilerplate as package data, remote as opt-in**: Bundling boilerplate avoids mandatory network access and a mandatory PAT. The `--remote-assets` escape hatch exists for cases where the bundled version is stale and the engineer wants the latest CSS/configuration without waiting for a siesta release. The version gap is a deliberate design constraint: siesta releases drive boilerplate updates.
+
+**`# :siesta: <update>` markers in conf.py**: The update boundary markers allow `siesta docs update` to refresh Entalpic's Sphinx plugin configuration in user projects without clobbering their project-specific customizations (author, version, custom extensions). This solves the "generated file drift" problem without requiring users to track upstream changes manually.
+
+**Agentic exploration workflow**: The branch `feat-agentic-research-workflow` introduces `siesta project quickstart --explo` and `siesta project add-skill agentic-exploration`. These commands scaffold `Human.md` / `AGENT.md` at the project root and copy the bundled skill under `.claude/skills/agentic-exploration/`. Template placeholders known at scaffold time (`[🙋 Project name]`, `[🙋 package name]`, `[🙋 test command]`, `[🙋 docs command]`) are substituted; researcher-owned placeholders are preserved for manual authoring. Lifecycle documents (`research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, `handoff.md`) are **not** created at init — the agent materializes them from templates only when real work calls for them.
