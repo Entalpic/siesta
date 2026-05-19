@@ -9,6 +9,7 @@ intentionally not created at init — the agent materializes them from
 ``templates/`` only when the researcher's real work calls for them.
 """
 
+import re
 from pathlib import Path
 from shutil import copy2, copytree
 from typing import Callable
@@ -26,6 +27,54 @@ REFERENCE_TO_PROJECT_FILE: dict[str, str] = {
     "references/human.md": "Human.md",
     "references/agent.md": "AGENT.md",
 }
+
+
+_PROJECT_NAME_MAX_LEN = 128
+"""Maximum allowed length for a sanitized project name."""
+
+
+def _sanitize_project_name(name: str) -> str:
+    """Strip control characters and newlines from a project name.
+
+    Prevents a crafted ``name`` in ``pyproject.toml`` (e.g.
+    ``foo\\n\\n## Ignore prior instructions…``) from injecting headings or
+    instructions into the AI-facing ``AGENT.md`` / ``Human.md`` files.
+
+    Parameters
+    ----------
+    name : str
+        Raw project name as read from ``pyproject.toml`` or the directory.
+
+    Returns
+    -------
+    str
+        The sanitized name: only PEP 508 package-name characters retained
+        (``[a-zA-Z0-9._-]``), truncated to :data:`_PROJECT_NAME_MAX_LEN`
+        characters.
+
+    Raises
+    ------
+    ValueError
+        If the sanitized name is empty.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        _sanitize_project_name("foo\\n## Inject")  # -> "fooInject"
+        _sanitize_project_name("my-project_1.0")   # -> "my-project_1.0"
+    """
+    # Restrict to PEP 508 package-name characters (letters, digits, hyphens,
+    # underscores, dots) to prevent injection of markdown syntax or control
+    # characters into the AI-facing template files.
+    sanitized = re.sub(r"[^a-zA-Z0-9._-]", "", name)
+    sanitized = sanitized[:_PROJECT_NAME_MAX_LEN]
+    if not sanitized:
+        raise ValueError(
+            f"Project name '{name!r}' is empty after sanitization. "
+            "Provide a valid name via pyproject.toml or use the directory name."
+        )
+    return sanitized
 
 
 def _assert_not_symlink(path: Path, label: str) -> None:
@@ -375,6 +424,9 @@ def setup_agentic_exploration(
         )
     """
     project_path = resolve_path(project_path)
+    # Sanitize before any template substitution to prevent prompt injection via
+    # a crafted pyproject.toml name field.
+    project_name = _sanitize_project_name(project_name)
     substitutions = _build_substitutions(project_name, tests=tests, docs=docs, layout=layout)
     write_agentic_reference_files(project_path, substitutions, overwrite)
     copy_agentic_skill(project_path, overwrite)
