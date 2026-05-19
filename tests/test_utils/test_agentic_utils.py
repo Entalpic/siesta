@@ -1,4 +1,5 @@
 # Copyright 2025 Entalpic
+import pytest
 from pathlib import Path
 
 from siesta.utils.agentic import (
@@ -179,3 +180,42 @@ def test_write_agentic_reference_files_lib_layout_keeps_src_lines(tmp_path):
     # lib layout: src/ lines must be present.
     assert "src/my_lib/" in agent_text
     assert "Always run tests after any change to `src/`" in agent_text
+
+
+# --- symlink-safety tests ---
+
+
+def test_write_agentic_reference_files_refuses_symlinked_dest(tmp_path):
+    # If Human.md is a symlink, write must be refused.
+    target = tmp_path / "elsewhere.md"
+    target.write_text("sensitive")
+    (tmp_path / "Human.md").symlink_to(target)
+
+    subs = _build_substitutions("proj", tests=False, docs=False)
+    with pytest.raises(ValueError, match="symbolic link"):
+        write_agentic_reference_files(tmp_path, subs, overwrite=False)
+
+    # The symlink target must be untouched.
+    assert target.read_text() == "sensitive"
+
+
+def test_copy_agentic_skill_refuses_symlinked_dest_root(tmp_path):
+    # If .claude/skills/agentic-exploration is a symlink, copy must be refused.
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    claude_skills = tmp_path / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+    (claude_skills / "agentic-exploration").symlink_to(other_dir)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        copy_agentic_skill(tmp_path, overwrite=False)
+
+
+def test_copy_agentic_skill_refuses_symlinked_parent(tmp_path):
+    # If .claude itself is a symlink, copy must be refused.
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    (tmp_path / ".claude").symlink_to(other_dir)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        copy_agentic_skill(tmp_path, overwrite=False)

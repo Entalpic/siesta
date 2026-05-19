@@ -11,6 +11,7 @@ intentionally not created at init — the agent materializes them from
 
 from pathlib import Path
 from shutil import copy2, copytree
+from typing import Callable
 
 from siesta.utils.common import logger, resolve_path
 from siesta.utils.config import ROOT
@@ -25,6 +26,70 @@ REFERENCE_TO_PROJECT_FILE: dict[str, str] = {
     "references/human.md": "Human.md",
     "references/agent.md": "AGENT.md",
 }
+
+
+def _assert_not_symlink(path: Path, label: str) -> None:
+    """Raise ``ValueError`` if ``path`` is a symbolic link.
+
+    Prevents siesta from following symlinks into unintended filesystem
+    locations when writing scaffolded files.
+
+    Parameters
+    ----------
+    path : Path
+        The path to check.
+    label : str
+        Human-readable name for the path used in the error message.
+
+    Raises
+    ------
+    ValueError
+        If ``path`` is a symbolic link.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        _assert_not_symlink(Path("/tmp/proj/Human.md"), "Human.md")
+    """
+    if path.is_symlink():
+        raise ValueError(
+            f"Refusing to write to '{path}': {label} is a symbolic link. "
+            "Remove the symlink and retry."
+        )
+
+
+def _symlink_safe_copy(base_copy_fn: Callable[[str, str], None]) -> Callable[[str, str], None]:
+    """Wrap a ``shutil.copy2``-compatible function to refuse symlink destinations.
+
+    Parameters
+    ----------
+    base_copy_fn : Callable[[str, str], None]
+        The underlying copy function (e.g. ``copy2`` or ``_copy_not_overwrite``).
+
+    Returns
+    -------
+    Callable[[str, str], None]
+        A wrapper that raises ``ValueError`` if the destination is a symlink.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        safe_fn = _symlink_safe_copy(copy2)
+        safe_fn("/tmp/src.txt", "/tmp/dest.txt")  # raises if dest is a symlink
+    """
+
+    def _copy(src: str, dest: str) -> None:
+        dest_path = Path(dest)
+        if dest_path.is_symlink():
+            raise ValueError(
+                f"Refusing to write to '{dest_path}': destination is a symbolic link. "
+                "Remove the symlink and retry."
+            )
+        base_copy_fn(src, dest)
+
+    return _copy
 
 
 def _normalize_package_name(project_name: str) -> str:
@@ -199,6 +264,9 @@ def write_agentic_reference_files(
             src.read_text(encoding="utf-8"), substitutions
         )
         dest = project_path / target_name
+        # Refuse to follow symlinks — a malicious repo could point these names
+        # at files outside the project directory.
+        _assert_not_symlink(dest, target_name)
         if dest.exists() and not overwrite:
             backed_up = backup(dest)
             logger.warning(f"Backing up {dest} to {backed_up}")
@@ -232,12 +300,23 @@ def copy_agentic_skill(project_path: Path, overwrite: bool) -> None:
     # (Claude Code) and intentionally lives only in the *target* project, not in
     # siesta's source tree.
     dest_root = project_path / ".claude" / "skills" / "agentic-exploration"
+    # Guard against symlinked parent directories that could redirect writes
+    # outside the project tree before we create any directories.
+    for check_path in (
+        project_path / ".claude",
+        project_path / ".claude" / "skills",
+        dest_root,
+    ):
+        _assert_not_symlink(check_path, str(check_path.relative_to(project_path)))
     dest_root.parent.mkdir(parents=True, exist_ok=True)
+    base_copy = copy2 if overwrite else _copy_not_overwrite
     copytree(
         src_root,
         dest_root,
         dirs_exist_ok=True,
-        copy_function=copy2 if overwrite else _copy_not_overwrite,
+        # Wrap the copy function to refuse symlinked destination files within
+        # the skill tree (prevents per-file escape via pre-placed symlinks).
+        copy_function=_symlink_safe_copy(base_copy),
     )
 
 
