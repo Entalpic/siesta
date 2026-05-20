@@ -38,8 +38,9 @@ body:
     attributes:
       label: Branch to start from
       description: |
-        Required when Branch is **new**. The branch to create the new branch from. Typically, main.
+        Required when Branch is **new**. The branch to create the new branch from. Typically, `main` is a good default.
       placeholder: main
+      value: main
 
   - type: textarea
     id: task
