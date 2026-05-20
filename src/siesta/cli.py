@@ -599,15 +599,8 @@ def init_docs(
             logger.warning(f"Path already exists: {path}")
             logger.warning("Use --overwrite to overwrite.")
             logger.abort("Aborting.", exit=1)
-        # user wants to overwrite -> remove the folder and warn
-        logger.warning("🚧 Overwriting path.")
-        rmtree(path)
 
-    # Create the docs folder
-    path.mkdir(parents=True)
-    logger.success("Docs initialized 📄")
-
-    # Whether to install dependencies
+    # Prompt collection phase: gather decisions before any mutation.
     if deps is None:
         deps = logger.confirm("Would you like to install recommended dependencies?")
 
@@ -615,18 +608,30 @@ def init_docs(
     if deps:
         # Check if uv.lock exists in order to decide whether to use uv or not
         if resolve_path("./uv.lock").exists():
-            with_uv = (
-                uv
-                or not interactive  # if not interactive, assume uv since uv.lock exists
-                or logger.confirm(
+            if uv is not None:
+                with_uv = uv
+            elif not interactive:  # if not interactive, assume uv since uv.lock exists
+                with_uv = True
+            else:
+                with_uv = logger.confirm(
                     "It looks like you are using uv. Use `uv add` to add dependencies?"
                 )
-            )
         else:
             if uv:
                 logger.warning(
                     "uv.lock not found. Skipping uv dependencies, installing with pip."
                 )
+
+    # Execution phase: perform mutations only after all decisions are collected.
+    if path.exists():
+        logger.warning("🚧 Overwriting path.")
+        rmtree(path)
+
+    path.mkdir(parents=True)
+    logger.success("Docs initialized 📄")
+
+    # Install dependencies if requested.
+    if deps:
         logger.info(f"Installing docs dependencies{' with uv.' if with_uv else '.'}..")
         # Execute the command to install dependencies
         install_dependencies(with_uv, with_uv and not as_main_deps)
@@ -700,8 +705,20 @@ def update(
     if not path.exists():
         logger.abort(f"Path not found: {path}", exit=1)
 
-    # Confirm to overwrite the documentation's HTML static files
-    if logger.confirm("Overwrite the documentation's HTML static files. Continue?"):
+    # Prompt collection phase: gather all confirmations up front.
+    update_static = logger.confirm(
+        "Overwrite the documentation's HTML static files. Continue?"
+    )
+    update_conf = logger.confirm("Would you like to update the conf.py file?")
+    update_precommit = logger.confirm("Would you like to update the pre-commit hooks?")
+
+    if not any([update_static, update_conf, update_precommit]):
+        logger.info("No updates selected. Nothing to do.")
+        logger.success("Done.")
+        return
+
+    # Execution phase: run only the selected mutating actions.
+    if update_static:
         static = path / "source" / "_static"
         if not static.exists():
             logger.abort(f"Static folder not found: {static}", exit=1)
@@ -715,13 +732,11 @@ def update(
         )
         logger.success("Static files updated.")
 
-    # Update the conf.py file
-    if logger.confirm("Would you like to update the conf.py file?"):
+    if update_conf:
         update_conf_py(path, branch=branch, local=not remote_assets)
         logger.success("[r]conf.py[/r] updated.")
 
-    # Update the pre-commit hooks
-    if logger.confirm("Would you like to update the pre-commit hooks?"):
+    if update_precommit:
         write_or_update_pre_commit_file()
         has_uv = Path("uv.lock").exists()
         if has_uv:
@@ -981,7 +996,43 @@ def quickstart_project(
         if gitignore is None:
             gitignore = CLI_DEFAULTS["gitignore"]
 
-    # Check if the project is already initialized
+    # Prompt collection phase: gather all unresolved decisions before mutations.
+    if deps is None:
+        deps = logger.confirm("Would you like to install recommended dependencies?")
+
+    if precommit is None:
+        precommit = logger.confirm(
+            "Would you like to update & install pre-commit hooks?"
+        )
+
+    if ipdb is None:
+        ipdb = logger.confirm("Would you like to add ipdb as debugger?")
+
+    if tests is None:
+        tests = logger.confirm("Would you like to initialize (pytest) tests infra?")
+
+    if actions is None:
+        actions = logger.confirm("Would you like to initialize GitHub Actions?")
+
+    if gitignore is None:
+        gitignore = logger.confirm(
+            "Would you like to initialize the ``.gitignore`` file?"
+        )
+
+    if docs is None:
+        docs = logger.confirm("Would you like to initialize the docs?")
+
+    docs_with_uv: bool | None = None
+    if docs and deps:
+        if Path("uv.lock").exists():
+            if interactive:
+                docs_with_uv = logger.confirm(
+                    "It looks like you are using uv. Use `uv add` to add dependencies?"
+                )
+            else:
+                docs_with_uv = True
+
+    # Execution phase: perform mutations after all decisions are collected.
     has_uv_lock = Path("uv.lock").exists()
     if not has_uv_lock:
         cmd = ["uv", "init"]
@@ -1003,9 +1054,6 @@ def quickstart_project(
     else:
         logger.info("Project already initialized with uv.")
 
-    # Install dependencies
-    if deps is None:
-        deps = logger.confirm("Would you like to install recommended dependencies?")
     if deps:
         dev_deps = load_deps()["dev"]
         installed = run_command(["uv", "add", "--dev"] + dev_deps)
@@ -1013,11 +1061,6 @@ def quickstart_project(
             logger.abort("Failed to install the dev dependencies.")
         logger.info("Dev dependencies installed.")
 
-    # Install pre-commit hooks
-    if precommit is None:
-        precommit = logger.confirm(
-            "Would you like to update & install pre-commit hooks?"
-        )
     if precommit:
         write_or_update_pre_commit_file()
         pre_commit_installed = run_command(["uv", "run", "pre-commit", "install"])
@@ -1025,57 +1068,45 @@ def quickstart_project(
             logger.abort("Failed to install pre-commit hooks.")
         logger.info("Pre-commit hooks installed.")
 
-    if ipdb is None:
-        ipdb = logger.confirm("Would you like to add ipdb as debugger?")
     if ipdb:
         add_ipdb_as_debugger()
         logger.info("[r]ipdb[/r] added as debugger.")
-    if tests is None:
-        tests = logger.confirm("Would you like to initialize (pytest) tests infra?")
+
     if tests:
-        # Use setup_tests but skip deps (already installed above) and set interactive=True
-        # since we already processed defaults above
+        # Decision ownership stays in quickstart; setup-tests receives explicit values.
         setup_tests(
             project_name=project_name,
             actions=actions,
             deps=False,  # deps already handled by quickstart
-            interactive=True,  # we already processed defaults above
+            interactive=False,
         )
-    else:
-        # Handle GitHub Actions independently when tests are skipped
-        # (setup_tests normally handles this, but we're not calling it)
-        if actions is None:
-            actions = logger.confirm("Would you like to initialize GitHub Actions?")
-        if actions:
-            # Warn if user wants CI but has no tests
-            if not Path("tests").exists():
-                logger.warning(
-                    "You're setting up GitHub Actions CI without tests. "
-                    "Either add tests later or update [r].github/workflows/test.yml[/r] "
-                    "to match your project's needs."
-                )
-            write_test_actions_config()
-            logger.info("Test actions config written.")
-    if gitignore is None:
-        gitignore = logger.confirm(
-            "Would you like to initialize the ``.gitignore`` file?"
-        )
+    elif actions:
+        # Warn if user wants CI but has no tests
+        if not Path("tests").exists():
+            logger.warning(
+                "You're setting up GitHub Actions CI without tests. "
+                "Either add tests later or update [r].github/workflows/test.yml[/r] "
+                "to match your project's needs."
+            )
+        write_test_actions_config()
+        logger.info("Test actions config written.")
+
     if gitignore:
         write_gitignore()
         logger.info("Gitignore written.")
 
-    if docs is None:
-        docs = logger.confirm("Would you like to initialize the docs?")
     if docs:
         init_docs(
             path=docs_path,
             as_main_deps=as_main_deps,
             overwrite=overwrite,
             deps=deps,
-            interactive=interactive,
+            uv=docs_with_uv,
+            interactive=False,
             branch=branch,
             contents=contents,
             remote_assets=remote_assets,
+            project_name=project_name,
         )
 
     tree_project(".")
@@ -1153,9 +1184,14 @@ def setup_tests(
     # Check if uv is available and uv.lock exists
     has_uv = Path("uv.lock").exists()
 
-    # Install test dependencies
+    # Prompt collection phase: gather decisions before mutations.
     if deps is None:
         deps = logger.confirm("Would you like to install test dependencies?")
+
+    if actions is None:
+        actions = logger.confirm("Would you like to initialize GitHub Actions?")
+
+    # Execution phase: apply selected mutations.
     if deps:
         test_deps = ["pytest", "pytest-cov"]
         if has_uv:
@@ -1173,9 +1209,6 @@ def setup_tests(
     write_tests_infra(project_name)
     logger.info("Tests infra written.")
 
-    # Optionally set up GitHub Actions
-    if actions is None:
-        actions = logger.confirm("Would you like to initialize GitHub Actions?")
     if actions:
         write_test_actions_config()
         logger.info("Test actions config written.")

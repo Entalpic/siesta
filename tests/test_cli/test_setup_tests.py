@@ -5,6 +5,7 @@ from subprocess import run
 
 import pytest
 
+import siesta.cli as cli
 from siesta.cli import app
 
 
@@ -186,3 +187,42 @@ def test_setup_tests_interactive_flag(existing_uv_project, capture_output):
 
     # Check GitHub Actions was NOT created (we specified --no-actions)
     assert not (existing_uv_project / ".github").exists()
+
+
+def test_setup_tests_collects_decisions_before_mutations(existing_uv_project, monkeypatch):
+    """Test setup-tests collects prompts before mutating project state."""
+    monkeypatch.chdir(existing_uv_project)
+    events: list[str] = []
+    answers = iter([True, True])
+
+    monkeypatch.setattr(
+        cli.logger,
+        "confirm",
+        lambda _msg: events.append("confirm") or next(answers),
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_command",
+        lambda cmd, **_kwargs: events.append(f"run:{' '.join(cmd)}") or True,
+    )
+    monkeypatch.setattr(
+        cli, "write_tests_infra", lambda *_args, **_kwargs: events.append("write_tests_infra")
+    )
+    monkeypatch.setattr(
+        cli,
+        "write_test_actions_config",
+        lambda *_args, **_kwargs: events.append("write_test_actions_config"),
+    )
+
+    try:
+        app(["project", "setup-tests", "-i", "--project-name=existing_project"])
+    except SystemExit as e:
+        assert e.code == 0
+
+    first_mutation = next(i for i, event in enumerate(events) if event != "confirm")
+    confirm_indices = [i for i, event in enumerate(events) if event == "confirm"]
+    assert confirm_indices
+    assert max(confirm_indices) < first_mutation
+    assert events[first_mutation].startswith("run:")
+    assert "write_tests_infra" in events
+    assert "write_test_actions_config" in events
