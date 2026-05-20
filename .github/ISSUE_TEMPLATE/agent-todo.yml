@@ -1,3 +1,4 @@
+# Copyright 2025 Entalpic
 name: Agent TODO
 description: Agent-actionable work item (auto-labeled agent:todo). Requires branch intent.
 title: "[agent todo] "
@@ -26,11 +27,19 @@ body:
   - type: input
     id: branch_name
     attributes:
-      label: Existing branch name
+      label: Existing branch name to work on
       description: |
         Required when Branch is **existing**. Remote branch name only (no `origin/` prefix), e.g. `feat-agentic-research-workflow`.
         Leave blank when Branch is **new**.
       placeholder: feat-my-feature
+
+  - type: input
+    id: branch_from
+    attributes:
+      label: Branch to start from
+      description: |
+        Required when Branch is **new**. The branch to create the new branch from. Typically, main.
+      placeholder: main
 
   - type: textarea
     id: task
