@@ -50,6 +50,8 @@ def test_add_skill_creates_agentic_surface(tmp_path_chdir, capture_output):
 def test_add_skill_substitutes_project_name(tmp_path_chdir, capture_output):
     """Project name from pyproject.toml is substituted into AGENT.md."""
     _seed_minimal_project(tmp_path_chdir, name="weather-vision")
+    # Create src/ so layout is inferred as "lib" and the src/ bullet is present.
+    (tmp_path_chdir / "src").mkdir()
 
     with capture_output():
         try:
