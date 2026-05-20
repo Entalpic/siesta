@@ -20,6 +20,7 @@ Every work item follows the same cycle:
 8. **Adversarial review** - Spawn a sub-agent whose explicit task is to adversarially review the implementation and assess security risks
 9. **Commit** — one issue = one commit, conventional message, `Refs #<num>` in the footer.
 10. **Close** — update the issue with the commit hash, switch label to `agent:done`, close the issue.
+11. **Wrap-up** — when implementation is done, run the `/wrap-up-branch` skill to finalize branch readiness.
 
 ## Always-on rules
 
@@ -30,6 +31,7 @@ Every work item follows the same cycle:
 5. **Plans live in the issue's managed comment.** Local drafts in `plans/` are allowed for noisy iteration but must be published to the comment at four checkpoints: end of scouting, start of build, before commit, after commit.
 6. **GitHub state wins.** When the issue and any local artifact (e.g. `plans/`) disagree, the issue is correct.
 7. **Never publish secrets** into issue bodies or comments — tokens, `.env` contents, `gh auth token` output, credentials, PII, customer data. Treat issues as world-readable until proven otherwise.
+8. **Use wrap-up skill at the end.** After implementation and critique are complete, use `/wrap-up-branch` before considering the work finished.
 
 ## Worktrees
 
@@ -57,6 +59,7 @@ If the next pickup is a scouted issue:
 ## Skills index
 
 - [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) — `gh` mechanics for the `agent:todo` issue lifecycle: claiming, managed plan comments, label transitions.
+- `/wrap-up-branch` — required end-of-task branch finalization workflow once implementation is complete.
 
 ## Local artifacts
 
