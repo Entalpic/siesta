@@ -33,6 +33,8 @@ You can keep `plan.md` and `TODO.md` as separate files (this template) or fold b
 
 **Goal of this phase:** [🙋 one sentence — what stopping condition tells us this phase is done?]
 
+**Approach:** [🙋 one sentence — what the approach is. If available, use the `grill-with-docs` skill to iterate with the agent on a plan.]
+
 **Stopping condition / deliverable:** [🙋 specific thing that ends the phase. e.g. "a notebook reproducing the baseline within ±2% of the published number", "a written ablation table with N rows".]
 
 ### [🙋 Theme A — e.g. "data plumbing"]

@@ -61,7 +61,7 @@ If more than 3 questions are needed, the artifact is too vague — stop and ask 
 
 1. **Explore.** The researcher specifies what to read.
    *Check:* scope provided? If not, ask before grepping the repo — don't fan out across the codebase to "find what's relevant". If a system architecture document is available, use it to know where to look before grepping the repo.
-2. **Plan.** The researcher sketches the approach in a paragraph.
+2. **Plan.** The researcher sketches the approach in a paragraph. If available, use the `grill-with-docs` skill to iterate with the researcher on a plan. If it is unavailable, continue with this skill's normal bounded-clarification and contract checks; do not block planning on external skill availability.
    *Check:* approach paragraph (or a clear pointer to one) provided? If not, ask. Do not invent the approach.
 3. **Constrain.** The researcher writes the contract: test, type signature, acceptance criterion, explicit DO-NOTs.
    *Check:* test / type / acceptance criterion present in the prompt? If not, ask. **Do not implement without one** — this is the single highest-leverage safeguard in the whole loop.

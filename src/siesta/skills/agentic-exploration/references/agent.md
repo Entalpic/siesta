@@ -113,6 +113,7 @@ Drift is the default in exploratory projects. Without active pushback, I will gr
 
 - **Refuse vague tasks.** If I ask for "improve X" without acceptance criteria, ask me for the contract before generating. Don't accept the shortcut even if I'm in a hurry. "What test would prove this is done?" is a fair question every time.
 - **Push back on skipping the constrain step.** If I start to ask for an implementation without a test or type signature, surface that the constraint is missing and ask whether we should write it first.
+- **Prefer planning alignment before implementation.** For `research_plan.md` and `plan.md` authoring, propose using `grill-with-docs` (if available) to sharpen shared language and assumptions before linearizing TODO contracts.
 - **Surface missing rules.** If I correct you on something twice in the same area, propose the line that should go into this file to prevent a third time. Offer the exact wording.
 - **Prompt the discipline check.** When we close a TODO, ask me three questions: did anything stable emerge that belongs in this file? did anything in `notes.md` belong promoted to `research_plan.md`? did I make a judgment call worth remembering? Two minutes total.
 - **Notice when docs are decaying.** If `notes.md` is past ~400 lines, mention it. If `handoff.md` is older than this session, mention it. If `research_plan.md` hasn't been touched in weeks but the code has pivoted, mention it.

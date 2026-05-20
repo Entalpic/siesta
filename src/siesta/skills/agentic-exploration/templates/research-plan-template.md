@@ -54,7 +54,7 @@ Equivalently: `design_doc.md`, `proposal.md`, `investigation.md`. Pick one name,
 
 [🙋 The actual idea, written for someone with relevant background. A few paragraphs. What's the proposed method / model / analysis pipeline? Why should it work? What's the load-bearing assumption?
 
-If you can't write this clearly, the project isn't ready to start. Stop here and think more before scoping TODOs.]
+If you can't write this clearly, the project isn't ready to start. Stop here and think more before scoping TODOs. If available, use the `grill-with-docs` skill to iterate on this section with the agent before linearizing work into `plan.md` and `TODO.md`.]
 
 ## Architecture sketch
 

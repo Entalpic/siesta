@@ -50,10 +50,10 @@ Only issues tagged `agent:todo` are agent-actionable; other issues (bugs, human 
 
 Every work item follows the same cycle:
 
-1. **Pick** an open issue tagged `agent:todo` with no `agent:*` status label set. Prefer issues filed with the **Agent TODO** template (`.github/ISSUE_TEMPLATE/agent-todo.yml`), which require branch intent: `new` (agent creates a conventional branch + worktree) or `existing` (named branch).
+1. **Pick** an open issue tagged `agent:todo` with no `agent:*` status label set. Prefer issues filed with the **Agent TODO** template (`.github/ISSUE_TEMPLATE/agent-todo.yml`), which requires branch intent: `new` (agent creates a conventional branch + worktree) or `existing` (named branch), and includes `Grill with docs` (`yes`/`no`) to indicate whether planning should use the `grill-with-docs` skill.
 2. **Claim** by setting the appropriate `agent:*` label *before* substantive reading or writing.
 3. **Optional clarification** with the user.
-4. **Optional scout** — produce a plan in the issue's managed comment without implementation changes.
+4. **Optional scout** — produce a plan in the issue's managed comment without implementation changes. If the issue has `Grill with docs: yes`, recommend using `grill-with-docs` to iterate on the plan before build.
 5. **Plan approval** — get explicit user go-ahead before implementing.
 6. **Builder grill gate** — builder runs `/grill-with-docs`, records outcomes/open questions, then explicitly asks permission to proceed. While waiting, keep the issue in `agent:blocked`.
 7. **Build** — implement only after explicit user approval to build.
