@@ -1,6 +1,7 @@
 # Copyright 2025 Entalpic
 from pathlib import Path
 
+import siesta.cli as cli
 from siesta.cli import app
 
 
@@ -136,3 +137,51 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
 
     # Check GitHub Actions does NOT exist (user specified --no-actions)
     assert not Path(tmp_path_chdir, ".github").exists()
+
+
+def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
+    """Test quickstart collects prompts before any mutating command runs."""
+    events: list[str] = []
+    prompts = iter([True, True, True, True, True, True, True])
+
+    def fake_confirm(message: str) -> bool:
+        events.append(f"confirm:{message}")
+        return next(prompts)
+
+    def fake_run_command(cmd, check=True, cwd=None):
+        cmd_str = " ".join(cmd)
+        if cmd == ["uv", "--version"]:
+            events.append("check_uv")
+        else:
+            events.append(f"run:{cmd_str}")
+
+        class Result:
+            stdout = "ok"
+            returncode = 0
+
+        return Result()
+
+    monkeypatch.setattr(cli.logger, "confirm", fake_confirm)
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", fake_run_command)
+    monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
+    monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: events.append("precommit_file"))
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: events.append("ipdb"))
+    monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: events.append("setup_tests"))
+    monkeypatch.setattr(cli, "write_gitignore", lambda: events.append("gitignore"))
+    monkeypatch.setattr(cli, "init_docs", lambda **_kwargs: events.append("init_docs"))
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: events.append("tree"))
+
+    try:
+        app(["project", "quickstart", "-i"])
+    except SystemExit as e:
+        assert e.code == 0
+
+    first_mutation = next(
+        i
+        for i, event in enumerate(events)
+        if event != "check_uv" and not event.startswith("confirm:")
+    )
+    prompt_indices = [i for i, event in enumerate(events) if event.startswith("confirm:")]
+    assert prompt_indices
+    assert max(prompt_indices) < first_mutation

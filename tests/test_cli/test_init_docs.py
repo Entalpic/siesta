@@ -1,6 +1,7 @@
 # Copyright 2025 Entalpic
 import pytest
 
+import siesta.cli as cli
 from siesta.cli import app
 
 
@@ -151,3 +152,82 @@ def test_init_docs_respects_no_deps(
     docs_dir = temp_project_with_git_and_remote / "docs"
     assert docs_dir.exists()
     assert (docs_dir / "source" / "conf.py").exists()
+
+
+def test_init_docs_collects_prompts_before_mutation(
+    temp_project_with_git_and_remote, monkeypatch
+):
+    """Test that docs init collects interactive decisions before mutating state."""
+    monkeypatch.chdir(temp_project_with_git_and_remote)
+    (temp_project_with_git_and_remote / "uv.lock").write_text("")
+    events: list[str] = []
+
+    def fake_confirm(message: str) -> bool:
+        events.append(f"confirm:{message}")
+        return True
+
+    monkeypatch.setattr(cli.logger, "confirm", fake_confirm)
+    monkeypatch.setattr(
+        cli, "install_dependencies", lambda *_args, **_kwargs: events.append("install")
+    )
+    monkeypatch.setattr(
+        cli, "copy_boilerplate", lambda *_args, **_kwargs: events.append("copy")
+    )
+    monkeypatch.setattr(
+        cli, "make_empty_folders", lambda *_args, **_kwargs: events.append("empty")
+    )
+    monkeypatch.setattr(
+        cli, "overwrite_docs_files", lambda *_args, **_kwargs: events.append("overwrite")
+    )
+    monkeypatch.setattr(
+        cli, "write_rtd_config", lambda *_args, **_kwargs: events.append("rtd")
+    )
+    monkeypatch.setattr(cli, "build_docs", lambda *_args, **_kwargs: events.append("build"))
+
+    orig_mkdir = cli.Path.mkdir
+
+    def tracked_mkdir(path_obj, *args, **kwargs):
+        events.append("mkdir")
+        return orig_mkdir(path_obj, *args, **kwargs)
+
+    monkeypatch.setattr(cli.Path, "mkdir", tracked_mkdir)
+
+    with pytest.raises(SystemExit) as exc_info:
+        app(["docs", "init", "-i"])
+    assert exc_info.value.code == 0
+
+    prompt_indices = [i for i, event in enumerate(events) if event.startswith("confirm:")]
+    first_mutation_idx = next(i for i, event in enumerate(events) if not event.startswith("confirm:"))
+    assert prompt_indices
+    assert max(prompt_indices) < first_mutation_idx
+
+
+def test_init_docs_cancel_during_prompt_has_no_mutation(
+    temp_project_with_git_and_remote, monkeypatch
+):
+    """Test cancellation during prompt collection leaves project untouched."""
+    monkeypatch.chdir(temp_project_with_git_and_remote)
+
+    monkeypatch.setattr(
+        cli.logger,
+        "confirm",
+        lambda _message: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+    monkeypatch.setattr(
+        cli.Path,
+        "mkdir",
+        lambda *_args, **_kwargs: pytest.fail("mkdir should not be called on cancellation"),
+    )
+    monkeypatch.setattr(
+        cli,
+        "install_dependencies",
+        lambda *_args, **_kwargs: pytest.fail(
+            "install_dependencies should not be called on cancellation"
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        app(["docs", "init", "-i"])
+    assert exc_info.value.code == 130
+
+    assert not (temp_project_with_git_and_remote / "docs").exists()

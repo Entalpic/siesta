@@ -19,7 +19,8 @@ Every work item follows the same cycle:
 7. **Critique & feedback** — summarize what changed, what was verified, residual risks.
 8. **Adversarial review** - Spawn a sub-agent whose explicit task is to adversarially review the implementation and assess security risks
 9. **Commit** — one issue = one commit, conventional message, `Refs #<num>` in the footer.
-10. **Close** — update the issue with the commit hash, switch label to `agent:done`, close the issue.
+10. **Wrap-up** — when implementation is done, run the `/wrap-up-branch` skill to finalize branch readiness.
+11. **Close** — update the issue with the commit hash, switch label to `agent:done`, close the issue.
 
 ## Always-on rules
 
@@ -30,6 +31,7 @@ Every work item follows the same cycle:
 5. **Plans live in the issue's managed comment.** Local drafts in `plans/` are allowed for noisy iteration but must be published to the comment at four checkpoints: end of scouting, start of build, before commit, after commit.
 6. **GitHub state wins.** When the issue and any local artifact (e.g. `plans/`) disagree, the issue is correct.
 7. **Never publish secrets** into issue bodies or comments — tokens, `.env` contents, `gh auth token` output, credentials, PII, customer data. Treat issues as world-readable until proven otherwise.
+8. **Use wrap-up skill before close.** Follow lifecycle order: run `/wrap-up-branch` after commit/critique and before closing the issue.
 
 ## Worktrees
 
@@ -46,6 +48,17 @@ A scout prepares the ground for a builder. This is how we have partial parallel 
 - Scouts **do not commit**.
 - Multiple scouts may run in parallel; each writes a distinct local draft and updates its own issue's managed comment.
 
+### Parallel scouting interview workflow
+
+When multiple scout sub-agents run in parallel, each scout must follow this interaction contract:
+
+- **Branch baseline first.** Scout from the branch declared in the issue body. If no valid branch is declared, default to `main` and explicitly note that fallback in the managed comment.
+- **Worktree when not on main.** If the effective scouting branch is not `main`, use a dedicated worktree for that scout.
+- **Mandatory grilling.** Use the `/grill-with-docs` skill during scouting.
+- **One question at a time.** Ask exactly one clarifying question, include a recommended answer, then stop and wait for the user before continuing.
+- **Track Q&A in GitHub.** Every question/answer turn must be appended to the issue's managed comment so the issue remains the source of truth.
+- **Stay read-only.** Question loops are scouting only: no implementation, docs, or test edits.
+
 ## Post-scouting
 
 If the next pickup is a scouted issue:
@@ -57,6 +70,7 @@ If the next pickup is a scouted issue:
 ## Skills index
 
 - [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) — `gh` mechanics for the `agent:todo` issue lifecycle: claiming, managed plan comments, label transitions.
+- `/wrap-up-branch` — required end-of-task branch finalization workflow once implementation is complete.
 
 ## Local artifacts
 

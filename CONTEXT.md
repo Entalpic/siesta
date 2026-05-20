@@ -1,0 +1,34 @@
+# Context
+
+## Glossary
+
+### Mutation
+An operation that changes project state, including filesystem writes and external side effects.
+
+### Prompt Collection Phase
+The initial command phase where all user decisions are gathered before any mutation is allowed.
+
+### Execution Phase
+The phase that starts after prompt collection and performs only the mutations selected by the user.
+
+### Non-Interactive Resolution
+Mode where no prompts are shown; command decisions are resolved from explicit flags first, then CLI defaults.
+
+### Cancellation
+User interruption during prompt collection that exits with code 130 at the CLI
+entrypoint and must occur before any mutation.
+
+### Validation Phase
+Fail-fast, non-mutating checks that run before prompt collection to reject invalid command contexts.
+
+### No-Op Selection
+A valid outcome where the user selects no actions; command exits successfully without mutation.
+
+### Decision Ownership
+The top-level invoked command owns prompt collection for all downstream actions and passes explicit decisions to helper or nested command calls.
+
+### Ordering Contract
+Behavioral guarantee that decision collection completes before the first mutating operation starts.
+
+### Input Precedence
+Explicit CLI flags are authoritative; prompts are used only to resolve unspecified decisions.
