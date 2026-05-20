@@ -48,6 +48,17 @@ A scout prepares the ground for a builder. This is how we have partial parallel 
 - Scouts **do not commit**.
 - Multiple scouts may run in parallel; each writes a distinct local draft and updates its own issue's managed comment.
 
+### Parallel scouting interview workflow
+
+When multiple scout sub-agents run in parallel, each scout must follow this interaction contract:
+
+- **Branch baseline first.** Scout from the branch declared in the issue body. If no valid branch is declared, default to `main` and explicitly note that fallback in the managed comment.
+- **Worktree when not on main.** If the effective scouting branch is not `main`, use a dedicated worktree for that scout.
+- **Mandatory grilling.** Use the `/grill-with-docs` skill during scouting.
+- **One question at a time.** Ask exactly one clarifying question, include a recommended answer, then stop and wait for the user before continuing.
+- **Track Q&A in GitHub.** Every question/answer turn must be appended to the issue's managed comment so the issue remains the source of truth.
+- **Stay read-only.** Question loops are scouting only: no implementation, docs, or test edits.
+
 ## Post-scouting
 
 If the next pickup is a scouted issue:
