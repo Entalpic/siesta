@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-siesta = "siesta.cli:main"
+siesta = "siesta.cli.main_app:main"
 
 [dependency-groups]
 dev = [

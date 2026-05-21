@@ -1,6 +1,6 @@
 # Copyright 2025 Entalpic
-import siesta.cli as cli
-from siesta.cli import app
+import siesta.cli.docs_app as cli
+from siesta.cli.main_app import app
 
 
 def test_update_docs_no_selection_is_noop(tmp_path, monkeypatch, capture_output):
@@ -9,7 +9,7 @@ def test_update_docs_no_selection_is_noop(tmp_path, monkeypatch, capture_output)
     (docs_path / "source" / "_static").mkdir(parents=True)
     monkeypatch.chdir(tmp_path)
 
-    monkeypatch.setattr(cli.logger, "confirm", lambda _message: False)
+    monkeypatch.setattr("siesta.cli.docs_app.logger.confirm", lambda _message: False)
     monkeypatch.setattr(
         cli,
         "copy_boilerplate",
@@ -53,7 +53,7 @@ def test_update_docs_collects_all_decisions_upfront(tmp_path, monkeypatch):
         events.append(f"confirm:{message}")
         return next(answers)
 
-    monkeypatch.setattr(cli.logger, "confirm", fake_confirm)
+    monkeypatch.setattr("siesta.cli.docs_app.logger.confirm", fake_confirm)
     monkeypatch.setattr(
         cli, "update_conf_py", lambda *_args, **_kwargs: events.append("update_conf_py")
     )

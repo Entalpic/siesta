@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from siesta.cli import app as app
+from siesta.cli.main_app import app as app
 
 os.environ["PYTHONBREAKPOINT"] = "ipdb.set_trace"
 
@@ -25,7 +25,14 @@ def mock_user_pat():
             "siesta.utils.github.get_user_pat",
             return_value="fake-github-pat-for-testing",
         ),
-        patch("siesta.cli.get_user_pat", return_value="fake-github-pat-for-testing"),
+        patch(
+            "siesta.cli.self_app.get_user_pat",
+            return_value="fake-github-pat-for-testing",
+        ),
+        patch(
+            "siesta.cli.docs_app.get_user_pat",
+            return_value="fake-github-pat-for-testing",
+        ),
     ):
         yield
 

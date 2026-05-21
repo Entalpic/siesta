@@ -36,7 +36,7 @@ from unittest.mock import patch
 import cyclopts
 import pytest
 
-from siesta.cli import app
+from siesta.cli.main_app import app
 from siesta.completions import (
     _CLI_NAME,
     _shell_quote,

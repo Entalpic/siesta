@@ -32,3 +32,12 @@ Behavioral guarantee that decision collection completes before the first mutatin
 
 ### Input Precedence
 Explicit CLI flags are authoritative; prompts are used only to resolve unspecified decisions.
+
+### CLI Domain Module
+A module that owns one command group and its command implementations (for example documentation, project, or self-management commands).
+
+### CLI Executable Contract
+The stable public surface for running `siesta` as a command. Behavior and command names must remain compatible; Python import paths are not part of this contract.
+
+### Secret Display Friction
+An explicit user confirmation step required before a command may reveal credential material in plaintext output.
