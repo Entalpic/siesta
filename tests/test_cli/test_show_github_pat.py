@@ -21,7 +21,7 @@ def test_show_github_pat_masked(capture_output):
 
 def test_show_github_pat_full(capture_output):
     """Test that show-github-pat --full displays the full token after confirmation."""
-    with patch("siesta.cli.self_app.logger.confirm", return_value=True):
+    with patch("siesta.cli.self_app.logger.confirm_secret", return_value=True):
         with capture_output() as output:
             try:
                 app(["self", "show-github-pat", "--full"])
@@ -35,7 +35,7 @@ def test_show_github_pat_full(capture_output):
 
 def test_show_github_pat_full_cancelled(capture_output):
     """Test that cancelling --full confirmation shows masked token instead."""
-    with patch("siesta.cli.self_app.logger.confirm", return_value=False):
+    with patch("siesta.cli.self_app.logger.confirm_secret", return_value=False):
         with capture_output() as output:
             try:
                 app(["self", "show-github-pat", "--full"])
@@ -46,6 +46,20 @@ def test_show_github_pat_full_cancelled(capture_output):
     assert "fake-github-pat-for-testing" not in output_text
     assert "fake-github-" in output_text
     assert "cancelled" in output_text.lower()
+
+
+def test_show_github_pat_full_declines_non_interactive(capture_output):
+    """Test that --full never reveals PAT when stdin is non-interactive."""
+    with patch("siesta.cli.self_app.logger.confirm_secret", return_value=False):
+        with capture_output() as output:
+            try:
+                app(["self", "show-github-pat", "--full"])
+            except SystemExit as e:
+                assert e.code == 0
+
+    output_text = output.getvalue()
+    assert "fake-github-pat-for-testing" not in output_text
+    assert "fake-github-" in output_text
 
 
 def test_show_github_pat_none(capture_output):

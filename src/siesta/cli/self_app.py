@@ -257,9 +257,11 @@ def set_github_pat(pat: Optional[str] = ""):
     )
     if not pat:
         pat = getpass.getpass("Enter your GitHub PAT (hidden): ")
-    logger.confirm(
+    if not logger.confirm_secret(
         f"Are you sure you want to set the GitHub PAT to {pat[:5]}...{pat[-5:]}?"
-    )
+    ):
+        logger.info("GitHub PAT not set.")
+        return
     set_password("siesta", "github_pat", pat)
     logger.success(
         "GitHub PAT set. You can now use ``--remote-assets`` to fetch remote files."
@@ -294,7 +296,7 @@ def show_github_pat(full: bool = False):
             "The full token will be displayed in plaintext and may be captured "
             "in terminal history, shell logs, or CI artifacts."
         )
-        if not logger.confirm(
+        if not logger.confirm_secret(
             "Display the full GitHub PAT in plaintext? Type Y to continue"
         ):
             logger.info("Full PAT display cancelled. Showing masked token instead.")
