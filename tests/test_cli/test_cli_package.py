@@ -77,3 +77,16 @@ def test_domain_modules_expose_command_callables():
 
 def test_self_app_registers_tab_completions():
     assert "tab-completions" in _subapp_names(self_app)
+
+
+def test_cli_domain_modules_import_without_cycles():
+    """Domain modules must import cleanly without circular dependencies."""
+    import importlib
+
+    for module_name in (
+        "siesta.cli.main_app",
+        "siesta.cli.docs_app",
+        "siesta.cli.project_app",
+        "siesta.cli.self_app",
+    ):
+        importlib.reload(importlib.import_module(module_name))

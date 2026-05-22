@@ -9,7 +9,6 @@ from typing import Annotated
 from cyclopts import App, Parameter
 from gitignore_parser import parse_gitignore
 
-from siesta.cli.docs_app import init_docs
 from siesta.utils.common import (
     get_project_name,
     load_deps,
@@ -278,6 +277,8 @@ def quickstart_project(
         logger.info("Gitignore written.")
 
     if docs:
+        from siesta.cli.docs_app import init_docs
+
         init_docs(
             path=docs_path,
             as_main_deps=as_main_deps,
