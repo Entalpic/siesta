@@ -15,8 +15,8 @@ from siesta.utils.common import load_deps, logger
 from siesta.utils.github import (
     get_latest_commit_info,
     get_latest_github_release_version,
-    get_user_pat,
 )
+from siesta.utils import github
 from siesta.utils.self import (
     compare_versions,
     get_installation_method,
@@ -276,7 +276,7 @@ def show_github_pat(full: bool = False):
         Requires explicit confirmation because the token may appear in terminal
         history, shell logs, and CI output.
     """
-    pat = get_user_pat()
+    pat = github.get_user_pat()
     if not pat:
         logger.warning(
             "No GitHub PAT found."

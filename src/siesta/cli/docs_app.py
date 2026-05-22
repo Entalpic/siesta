@@ -30,7 +30,7 @@ from siesta.utils.docs import (
     update_conf_py,
     write_rtd_config,
 )
-from siesta.utils.github import get_user_pat
+from siesta.utils import github
 
 docs_app = App(
     name="docs",
@@ -127,7 +127,7 @@ def init_docs(
 
     # Check for GitHub Personal Access Token (only needed for remote assets)
     if remote_assets:
-        pat = get_user_pat()
+        pat = github.get_user_pat()
         if not pat:
             logger.warning(
                 "You need to set a GitHub Personal Access Token"

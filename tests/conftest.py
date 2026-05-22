@@ -20,19 +20,9 @@ def mock_user_pat():
 
     This fixture is automatically used in all tests.
     """
-    with (
-        patch(
-            "siesta.utils.github.get_user_pat",
-            return_value="fake-github-pat-for-testing",
-        ),
-        patch(
-            "siesta.cli.self_app.get_user_pat",
-            return_value="fake-github-pat-for-testing",
-        ),
-        patch(
-            "siesta.cli.docs_app.get_user_pat",
-            return_value="fake-github-pat-for-testing",
-        ),
+    with patch(
+        "siesta.utils.github.get_user_pat",
+        return_value="fake-github-pat-for-testing",
     ):
         yield
 
