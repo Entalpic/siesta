@@ -36,7 +36,9 @@ def test_prompt_cancellation_raises_keyboard_interrupt(logger, monkeypatch):
         def ask(self):
             return None
 
-    monkeypatch.setattr("siesta.logger.questionary.text", lambda *_args, **_kwargs: Prompt())
+    monkeypatch.setattr(
+        "siesta.logger.questionary.text", lambda *_args, **_kwargs: Prompt()
+    )
     with pytest.raises(KeyboardInterrupt):
         logger.prompt("Project name")
 
