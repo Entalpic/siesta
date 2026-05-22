@@ -1,6 +1,10 @@
 # Copyright 2025 Entalpic
 """Tests for CLI package module layout and entrypoint contract."""
 
+import importlib
+import tomllib
+from pathlib import Path
+
 from cyclopts import App
 
 from siesta.cli import main
@@ -8,6 +12,20 @@ from siesta.cli.docs_app import build_docs, docs_app, init_docs
 from siesta.cli.main_app import app
 from siesta.cli.project_app import project_app, quickstart_project, setup_tests
 from siesta.cli.self_app import self_app, show_github_pat, tab_completions_app
+
+CANONICAL_SCRIPT_ENTRYPOINT = "siesta.cli.main_app:main"
+
+
+def test_project_scripts_entrypoint_matches_canonical_contract():
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    assert data["project"]["scripts"]["siesta"] == CANONICAL_SCRIPT_ENTRYPOINT
+
+
+def test_canonical_script_entrypoint_is_callable():
+    module_path, _, attr = CANONICAL_SCRIPT_ENTRYPOINT.partition(":")
+    module = importlib.import_module(module_path)
+    assert callable(getattr(module, attr))
 
 
 def test_entrypoint_main_is_callable():
