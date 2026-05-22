@@ -39,5 +39,5 @@ A module that owns one command group and its command implementations (for exampl
 ### CLI Executable Contract
 The stable public surface for running `siesta` as a command. Behavior and command names must remain compatible; Python import paths are not part of this contract.
 
-### Secret Display Friction
-An explicit user confirmation step required before a command may reveal credential material in plaintext output.
+### Secret Handling Policy
+The rules governing how credential material may enter and leave the CLI: secrets are not accepted via command-line arguments, and plaintext secret output requires explicit interactive confirmation.

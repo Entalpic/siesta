@@ -5,7 +5,6 @@ import builtins
 import getpass
 from pathlib import Path
 from textwrap import dedent
-from typing import Optional
 
 from cyclopts import App
 from rich import print as rprint
@@ -16,8 +15,8 @@ from siesta.utils.common import load_deps, logger
 from siesta.utils.github import (
     get_latest_commit_info,
     get_latest_github_release_version,
-    get_user_pat,
 )
+from siesta.utils import github
 from siesta.utils.self import (
     compare_versions,
     get_installation_method,
@@ -218,7 +217,7 @@ def _root_app():
 
 
 @self_app.command(name="set-github-pat")
-def set_github_pat(pat: Optional[str] = ""):
+def set_github_pat():
     """
     Store a GitHub Personal Access Token (PAT) in your keyring.
 
@@ -226,6 +225,9 @@ def set_github_pat(pat: Optional[str] = ""):
     like ``siesta docs init``, ``siesta docs update``, or ``siesta project quickstart``
     to fetch the latest boilerplate files from the remote repository. By default, local
     bundled files are used and no PAT is needed.
+
+    The token must be entered interactively via hidden prompt; passing a PAT on the
+    command line is not supported.
 
     `About GitHub PAT <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#about-personal-access-tokens>`_
 
@@ -240,26 +242,19 @@ def set_github_pat(pat: Optional[str] = ""):
     5. Only select the ``siesta`` repository
     6. Set *Repository Permissions* to *Contents: Read* and *Metadata: Read*.
     7. Click on *Generate token*.
-
-
-    Parameters
-    ----------
-    pat : str, optional
-        The GitHub Personal Access Token.
     """
     from keyring import set_password
-
-    assert isinstance(pat, str), "PAT must be a string."
 
     logger.warning(
         "Run [r]$ siesta self set-github-pat --help[/r]"
         + " if you're not sure how to generate a PAT."
     )
-    if not pat:
-        pat = getpass.getpass("Enter your GitHub PAT (hidden): ")
-    logger.confirm(
+    pat = getpass.getpass("Enter your GitHub PAT (hidden): ")
+    if not logger.confirm_secret(
         f"Are you sure you want to set the GitHub PAT to {pat[:5]}...{pat[-5:]}?"
-    )
+    ):
+        logger.info("GitHub PAT not set.")
+        return
     set_password("siesta", "github_pat", pat)
     logger.success(
         "GitHub PAT set. You can now use ``--remote-assets`` to fetch remote files."
@@ -281,7 +276,7 @@ def show_github_pat(full: bool = False):
         Requires explicit confirmation because the token may appear in terminal
         history, shell logs, and CI output.
     """
-    pat = get_user_pat()
+    pat = github.get_user_pat()
     if not pat:
         logger.warning(
             "No GitHub PAT found."
@@ -294,7 +289,7 @@ def show_github_pat(full: bool = False):
             "The full token will be displayed in plaintext and may be captured "
             "in terminal history, shell logs, or CI artifacts."
         )
-        if not logger.confirm(
+        if not logger.confirm_secret(
             "Display the full GitHub PAT in plaintext? Type Y to continue"
         ):
             logger.info("Full PAT display cancelled. Showing masked token instead.")

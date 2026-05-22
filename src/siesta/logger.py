@@ -210,6 +210,32 @@ class Logger(BaseLogger):
         """
         return self.prompt(f"{message} (Y/n)", "y").lower() == "y"
 
+    def confirm_secret(self, message: str) -> bool:
+        """Confirm a secret-related action with fail-closed semantics.
+
+        Requires an explicit ``y``/``yes`` response. Empty input, EOF, and
+        non-interactive stdin all decline.
+
+        Parameters
+        ----------
+        message : str
+            The message to confirm.
+
+        Returns
+        -------
+        bool
+            Whether the user explicitly confirmed the action.
+        """
+        if not sys.stdin.isatty():
+            return False
+
+        print(f"{self.prefix}{message} (y/N)", end="")
+        try:
+            response = input(":").strip().lower()
+        except EOFError:
+            return False
+        return response in ("y", "yes")
+
     def abort(self, message: str, exit=1):
         """Abort the program with a message.
 

@@ -173,7 +173,10 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
         cli, "setup_tests", lambda **_kwargs: events.append("setup_tests")
     )
     monkeypatch.setattr(cli, "write_gitignore", lambda: events.append("gitignore"))
-    monkeypatch.setattr(cli, "init_docs", lambda **_kwargs: events.append("init_docs"))
+    monkeypatch.setattr(
+        "siesta.cli.docs_app.init_docs",
+        lambda **_kwargs: events.append("init_docs"),
+    )
     monkeypatch.setattr(
         cli, "tree_project", lambda *_args, **_kwargs: events.append("tree")
     )
