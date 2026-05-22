@@ -187,6 +187,11 @@ class Logger(BaseLogger):
         -------
         str
             The value entered by the user.
+
+        Raises
+        ------
+        KeyboardInterrupt
+            If the prompt is cancelled (for example with Ctrl+C).
         """
         response = questionary.text(
             f"{self.prefix}{message}",
@@ -208,6 +213,11 @@ class Logger(BaseLogger):
         -------
         bool
             Whether the user confirmed the message.
+
+        Raises
+        ------
+        KeyboardInterrupt
+            If the prompt is cancelled (for example with Ctrl+C).
         """
         response = questionary.confirm(
             f"{self.prefix}{message}",
