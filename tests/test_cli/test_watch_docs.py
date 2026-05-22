@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 import pytest
 from watchdog.observers import Observer
 
-from siesta.cli import app
+from siesta.cli.main_app import app
 from siesta.utils.docs import AutoBuildDocs
 
 
@@ -26,7 +26,7 @@ def test_watch_docs_observer_setup(module_test_path, monkeypatch, capture_output
     mock_observer_instance = mock_observer.return_value
 
     with (
-        patch("siesta.cli.Observer", mock_observer),
+        patch("siesta.cli.docs_app.Observer", mock_observer),
         patch("time.sleep", side_effect=KeyboardInterrupt),
     ):
         with capture_output() as output:
@@ -78,7 +78,7 @@ def test_watch_docs_custom_patterns(module_test_path, monkeypatch, capture_outpu
     custom_patterns = "custom/*.py;other/*.rst"
 
     with (
-        patch("siesta.cli.Observer", mock_observer),
+        patch("siesta.cli.docs_app.Observer", mock_observer),
         patch("time.sleep", side_effect=KeyboardInterrupt),
     ):
         with capture_output():

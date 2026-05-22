@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from siesta import __version__
-from siesta.cli import app
+from siesta.cli.main_app import app
 from siesta.utils.github import format_github_access_error
 from siesta.utils.self import (
     PACKAGE_NAME,
@@ -385,11 +385,11 @@ class TestSelfVersionCommand:
         """Test that version command shows pip, release, and commit info."""
         with (
             patch(
-                "siesta.cli.get_latest_github_release_version",
+                "siesta.cli.self_app.get_latest_github_release_version",
                 return_value=(__version__, None),
             ),
             patch(
-                "siesta.cli.get_latest_commit_info",
+                "siesta.cli.self_app.get_latest_commit_info",
                 return_value=(self._mock_commit_info(), None),
             ),
             capture_output() as output,
@@ -408,11 +408,11 @@ class TestSelfVersionCommand:
         """Test that version command shows when update is available."""
         with (
             patch(
-                "siesta.cli.get_latest_github_release_version",
+                "siesta.cli.self_app.get_latest_github_release_version",
                 return_value=("99.0.0", None),
             ),
             patch(
-                "siesta.cli.get_latest_commit_info",
+                "siesta.cli.self_app.get_latest_commit_info",
                 return_value=(self._mock_commit_info(), None),
             ),
             capture_output() as output,
@@ -429,11 +429,11 @@ class TestSelfVersionCommand:
         """Test that version command surfaces fetch failure details."""
         with (
             patch(
-                "siesta.cli.get_latest_github_release_version",
+                "siesta.cli.self_app.get_latest_github_release_version",
                 return_value=(None, "GitHub API 401: Bad credentials"),
             ),
             patch(
-                "siesta.cli.get_latest_commit_info",
+                "siesta.cli.self_app.get_latest_commit_info",
                 return_value=(None, "GitHub API 401: Bad credentials"),
             ),
             capture_output() as output,
@@ -455,7 +455,9 @@ class TestSelfUpdateCommand:
     def test_update_command_editable_shows_warning(self, capture_output):
         """Test that update command shows warning for editable installs."""
         with (
-            patch("siesta.cli.get_installation_method", return_value="editable"),
+            patch(
+                "siesta.cli.self_app.get_installation_method", return_value="editable"
+            ),
             capture_output() as output,
         ):
             try:
@@ -469,8 +471,11 @@ class TestSelfUpdateCommand:
     def test_update_command_already_up_to_date(self, capture_output):
         """Test update command when already on latest version."""
         with (
-            patch("siesta.cli.get_installation_method", return_value="pip"),
-            patch("siesta.cli.get_latest_version", return_value=(__version__, None)),
+            patch("siesta.cli.self_app.get_installation_method", return_value="pip"),
+            patch(
+                "siesta.cli.self_app.get_latest_version",
+                return_value=(__version__, None),
+            ),
             capture_output() as output,
         ):
             try:
@@ -484,8 +489,11 @@ class TestSelfUpdateCommand:
     def test_upgrade_alias_works(self, capture_output):
         """Test that 'upgrade' is an alias for 'update'."""
         with (
-            patch("siesta.cli.get_installation_method", return_value="pip"),
-            patch("siesta.cli.get_latest_version", return_value=(__version__, None)),
+            patch("siesta.cli.self_app.get_installation_method", return_value="pip"),
+            patch(
+                "siesta.cli.self_app.get_latest_version",
+                return_value=(__version__, None),
+            ),
             capture_output() as output,
         ):
             try:
@@ -500,7 +508,7 @@ class TestSelfUpdateCommand:
     def test_dry_run_shows_command_uv(self, capture_output):
         """Test that --dry shows the uv command without executing."""
         with (
-            patch("siesta.cli.get_installation_method", return_value="uv"),
+            patch("siesta.cli.self_app.get_installation_method", return_value="uv"),
             capture_output() as output,
         ):
             try:
@@ -516,7 +524,7 @@ class TestSelfUpdateCommand:
     def test_dry_run_shows_command_pipx(self, capture_output):
         """Test that --dry shows the pipx command without executing."""
         with (
-            patch("siesta.cli.get_installation_method", return_value="pipx"),
+            patch("siesta.cli.self_app.get_installation_method", return_value="pipx"),
             capture_output() as output,
         ):
             try:
@@ -532,7 +540,7 @@ class TestSelfUpdateCommand:
     def test_dry_run_shows_command_pip(self, capture_output):
         """Test that --dry shows the pip command without executing."""
         with (
-            patch("siesta.cli.get_installation_method", return_value="pip"),
+            patch("siesta.cli.self_app.get_installation_method", return_value="pip"),
             capture_output() as output,
         ):
             try:

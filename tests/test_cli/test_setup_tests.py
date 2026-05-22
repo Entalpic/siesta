@@ -5,8 +5,8 @@ from subprocess import run
 
 import pytest
 
-import siesta.cli as cli
-from siesta.cli import app
+import siesta.cli.project_app as cli
+from siesta.cli.main_app import app
 
 
 @pytest.fixture
@@ -189,15 +189,16 @@ def test_setup_tests_interactive_flag(existing_uv_project, capture_output):
     assert not (existing_uv_project / ".github").exists()
 
 
-def test_setup_tests_collects_decisions_before_mutations(existing_uv_project, monkeypatch):
+def test_setup_tests_collects_decisions_before_mutations(
+    existing_uv_project, monkeypatch
+):
     """Test setup-tests collects prompts before mutating project state."""
     monkeypatch.chdir(existing_uv_project)
     events: list[str] = []
     answers = iter([True, True])
 
     monkeypatch.setattr(
-        cli.logger,
-        "confirm",
+        "siesta.cli.project_app.logger.confirm",
         lambda _msg: events.append("confirm") or next(answers),
     )
     monkeypatch.setattr(
@@ -206,7 +207,9 @@ def test_setup_tests_collects_decisions_before_mutations(existing_uv_project, mo
         lambda cmd, **_kwargs: events.append(f"run:{' '.join(cmd)}") or True,
     )
     monkeypatch.setattr(
-        cli, "write_tests_infra", lambda *_args, **_kwargs: events.append("write_tests_infra")
+        cli,
+        "write_tests_infra",
+        lambda *_args, **_kwargs: events.append("write_tests_infra"),
     )
     monkeypatch.setattr(
         cli,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from siesta.cli import app
+from siesta.cli.main_app import app
 
 
 def a_in_b_str_no_space(a, b):

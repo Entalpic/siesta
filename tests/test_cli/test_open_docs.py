@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from siesta.cli import app
+from siesta.cli.main_app import app
 
 
 @pytest.mark.parametrize("platform", ["Darwin", "Windows", "Linux"])
@@ -12,13 +12,15 @@ def test_open_docs(module_test_path, capture_output, platform, monkeypatch):
     monkeypatch.chdir(module_test_path)
 
     with capture_output() as output:
-        with patch("siesta.cli.platform.system") as mock_system:
+        with patch("siesta.cli.docs_app.platform.system") as mock_system:
             mock_system.return_value = platform
 
             # Only mock os.startfile for Windows
             if platform == "Windows":
-                with patch("siesta.cli.os.startfile", create=True) as mock_startfile:
-                    with patch("siesta.cli.subprocess.call") as mock_call:
+                with patch(
+                    "siesta.cli.docs_app.os.startfile", create=True
+                ) as mock_startfile:
+                    with patch("siesta.cli.docs_app.subprocess.call") as mock_call:
                         try:
                             app(["docs", "open"])
                         except SystemExit as e:
@@ -36,7 +38,7 @@ def test_open_docs(module_test_path, capture_output, platform, monkeypatch):
                         mock_call.assert_not_called()
             else:
                 # For Darwin and Linux, only mock subprocess.call
-                with patch("siesta.cli.subprocess.call") as mock_call:
+                with patch("siesta.cli.docs_app.subprocess.call") as mock_call:
                     try:
                         app(["docs", "open"])
                     except SystemExit as e:
