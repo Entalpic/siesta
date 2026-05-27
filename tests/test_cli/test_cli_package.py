@@ -64,7 +64,12 @@ def test_docs_app_registers_leaf_commands():
 
 
 def test_project_app_registers_leaf_commands():
-    assert _command_names(project_app) == {"quickstart", "setup-tests", "tree"}
+    assert _command_names(project_app) == {
+        "quickstart",
+        "setup-tests",
+        "add-skill",
+        "tree",
+    }
 
 
 def test_self_app_registers_leaf_commands():
