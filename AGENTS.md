@@ -19,8 +19,8 @@ Every work item follows the same cycle:
 7. **Critique & feedback** — summarize what changed, what was verified, residual risks.
 8. **Adversarial review** - Spawn a sub-agent whose explicit task is to adversarially review the implementation and assess security risks
 9. **Commit** — one issue = one commit, conventional message, `Refs #<num>` in the footer.
-10. **Wrap-up** — when implementation is done, run the `/wrap-up-branch` skill to finalize branch readiness.
-11. **Close** — update the issue with the commit hash, switch label to `agent:done`, close the issue.
+10. **Wrap-up** — when implementation is done, run the `/wrap-up-branch` skill through PR merge. Keep `agent:building` during PR/CI/wrap-up.
+11. **Close (post-merge)** — after merge succeeds, update the issue status with the merge commit hash, switch label to `agent:done`, and close the issue.
 
 ## Always-on rules
 
@@ -28,10 +28,10 @@ Every work item follows the same cycle:
 2. **One build at a time.** At most one issue may have `agent:building` per session. If the user asks for a second concurrent build, stop and ask what to do.
 3. **Don't steal claims.** If `agent:scouting` or `agent:building` is already set by another agent, stop and ask the user.
 4. **One issue = one commit** with a clear conventional commit message. Reference the issue (`Refs #<num>`) in the commit footer.
-5. **Plans live in the issue's managed comment.** Local drafts in `plans/` are allowed for noisy iteration but must be published to the comment at four checkpoints: end of scouting, start of build, before commit, after commit.
+5. **Plans live in the issue's managed comment.** Local drafts in `plans/` are allowed for noisy iteration but must be published to the comment at four checkpoints: end of scouting, start of build, before commit, after commit. For merged PRs, publish a final post-merge status update before closing.
 6. **GitHub state wins.** When the issue and any local artifact (e.g. `plans/`) disagree, the issue is correct.
 7. **Never publish secrets** into issue bodies or comments — tokens, `.env` contents, `gh auth token` output, credentials, PII, customer data. Treat issues as world-readable until proven otherwise.
-8. **Use wrap-up skill before close.** Follow lifecycle order: run `/wrap-up-branch` after commit/critique and before closing the issue.
+8. **Use wrap-up skill before close.** Follow lifecycle order: run `/wrap-up-branch` after commit/critique and before closing the issue. Wrap-up is not complete until the linked issue is transitioned to `agent:done` and closed.
 
 ## Worktrees
 
@@ -69,7 +69,7 @@ If the next pickup is a scouted issue:
 
 ## Skills index
 
-- [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) — `gh` mechanics for the `agent:todo` issue lifecycle: claiming, managed plan comments, label transitions.
+- [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) — `gh` mechanics for the `agent:todo` issue lifecycle: claiming, managed plan comments, label transitions, and post-merge close-out.
 - `/wrap-up-branch` — required end-of-task branch finalization workflow once implementation is complete.
 
 ## Local artifacts

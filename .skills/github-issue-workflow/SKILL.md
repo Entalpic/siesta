@@ -38,7 +38,7 @@ No status label means the issue is **unclaimed**.
 | `agent:building`  | A builder is implementing; one per session                          |
 | `agent:blocked`   | Paused awaiting user input or external dependency                   |
 | `agent:reviewing` | Implementation done, awaiting critique/feedback before commit       |
-| `agent:done`      | Committed and ready to close (or already closed)                    |
+| `agent:done`      | PR merged; post-merge issue finalization complete (or already closed) |
 
 ### Bootstrap (one-time per repo)
 
@@ -48,7 +48,7 @@ gh label create "agent:scouting"  --color a2eeef --description "Agent status: sc
 gh label create "agent:building"  --color fbca04 --description "Agent status: building (implementation in progress)"
 gh label create "agent:blocked"   --color d73a4a --description "Agent status: blocked (awaiting user or external)"
 gh label create "agent:reviewing" --color 0075ca --description "Agent status: reviewing (critique pending)"
-gh label create "agent:done"      --color cfd3d7 --description "Agent status: done (committed, ready to close)"
+gh label create "agent:done"      --color cfd3d7 --description "Agent status: done (merged and closed)"
 ```
 
 ## Branch (required on every agent TODO)
@@ -182,12 +182,18 @@ The managed comment **must** be up to date at:
 2. Start of build (plan confirmed).
 3. End of build, before commit (critique + verification summary).
 4. After commit (final status + commit hash).
+5. After merge, before close (final status + merge commit hash).
 
 Between checkpoints, prefer local drafts in `plans/scouting-<slug>.md` or `plans/building-<slug>.md` to limit `gh` traffic.
 
-## Closing an issue
+## Wrap-up integration (post-merge close-out)
 
-After commit:
+Keep `agent:building` during PR open, CI, and merge. After PR merge succeeds, run this close-out sequence:
+
+1. Resolve linked issue from the branch work item (`Refs #<num>` convention; avoid `Closes #<num>` automation).
+2. Update the managed comment one last time with `Phase: done` and `Commit: <merge_sha>`.
+3. Transition status labels to `agent:done` (removing other `agent:*` status labels).
+4. Close the issue as completed.
 
 ```bash
 gh issue edit <num> \
@@ -196,7 +202,9 @@ gh issue edit <num> \
 gh issue close <num> --reason completed
 ```
 
-Update the managed comment one last time with `Commit: <hash>` in the Status block before closing. The `agent:todo` label remains on the closed issue (useful for `gh issue list --state closed --label agent:todo`).
+## Closing an issue
+
+Only close after merge has succeeded and the post-merge close-out sequence above is complete. The `agent:todo` label remains on the closed issue (useful for `gh issue list --state closed --label agent:todo`).
 
 ## Conflict resolution
 
@@ -205,7 +213,7 @@ GitHub state wins (AGENTS.md rule 6). Edge cases:
 | Conflict                                       | Resolution                                |
 | ---------------------------------------------- | ----------------------------------------- |
 | Two managed comments found on one issue        | Stop. Ask user which to keep.             |
-| Local `plans/built-*.md` but issue still open  | Sync: close the issue with commit info.   |
+| Local `plans/built-*.md` but issue still open  | Sync post-merge: update issue with merge hash, set `agent:done`, close. |
 | Local `plans/scouted-*.md` but no issue exists | Ask whether to create the issue.          |
 
 ## `gh` cheat sheet
@@ -220,6 +228,7 @@ GitHub state wins (AGENTS.md rule 6). Edge cases:
 | Atomic label transition       | `gh issue edit <num> --add-label "<a>" --remove-label "<b>,<c>"`                                      |
 | Create plan comment           | `gh issue comment <num> --body-file plan.md`                                                          |
 | Edit comment in place         | `gh api --method PATCH /repos/<o>/<r>/issues/comments/<id> -f body="$(cat plan.md)"`                  |
+| Post-merge close-out          | `gh issue edit <num> --add-label "agent:done" --remove-label "agent:scouting,agent:building,agent:blocked,agent:reviewing" && gh issue close <num> --reason completed` |
 | Close as completed            | `gh issue close <num> --reason completed`                                                             |
 | Check repo visibility         | `gh repo view --json visibility`                                                                      |
 
