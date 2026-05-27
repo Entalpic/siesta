@@ -14,6 +14,7 @@ dependencies = [
     "gitignore-parser>=0.1.13",
     "packaging>=24.0",
     "platformdirs>=4.0.0",
+    "questionary==2.1.1",
 ]
 
 [project.scripts]

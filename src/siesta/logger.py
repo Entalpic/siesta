@@ -25,6 +25,7 @@ Example
 import sys
 from datetime import datetime
 
+import questionary
 from rich import print
 from rich.console import Console
 from rich.panel import Panel
@@ -186,14 +187,19 @@ class Logger(BaseLogger):
         -------
         str
             The value entered by the user.
+
+        Raises
+        ------
+        KeyboardInterrupt
+            If the prompt is cancelled (for example with Ctrl+C).
         """
-        text = (
-            f"{self.prefix}{message} \\[default: {default}]"
-            if default
-            else f"{self.prefix}{message}"
-        )
-        print(text, end="")
-        return input(":").strip() or default
+        response = questionary.text(
+            f"{self.prefix}{message}",
+            default=default if default is not None else "",
+        ).ask()
+        if response is None:
+            raise KeyboardInterrupt()
+        return response.strip() or default
 
     def confirm(self, message: str) -> bool:
         """Confirm a message with the user.
@@ -207,8 +213,19 @@ class Logger(BaseLogger):
         -------
         bool
             Whether the user confirmed the message.
+
+        Raises
+        ------
+        KeyboardInterrupt
+            If the prompt is cancelled (for example with Ctrl+C).
         """
-        return self.prompt(f"{message} (Y/n)", "y").lower() == "y"
+        response = questionary.confirm(
+            f"{self.prefix}{message}",
+            default=True,
+        ).ask()
+        if response is None:
+            raise KeyboardInterrupt()
+        return response
 
     def confirm_secret(self, message: str) -> bool:
         """Confirm a secret-related action with fail-closed semantics.
