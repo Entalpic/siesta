@@ -48,6 +48,12 @@ The post-commit, pre-close phase where branch work is finalized through PR valid
 ### Builder Grill Gate
 The required pre-build checkpoint where the builder runs `/grill-with-docs`, records grill outcomes and open questions, then requests explicit build authorization. While awaiting approval, the issue remains `agent:blocked`; implementation starts only after explicit authorization.
 
+### Build Authorization Language
+The canonical approval verb is `build`. `implement` is an accepted synonym. Approval parsing accepts these verbs and standard inflections only when the message is explicitly affirmative.
+
+### Approval Ambiguity Fallback
+If approval text is not clearly affirmative with `build`/`implement` language, the builder must ask one direct confirmation question and keep the issue in `agent:blocked` until explicit authorization is provided.
+
 ### Post-Merge Finalization
 The mandatory issue-close sequence that occurs only after merge succeeds: publish final issue status, transition to `agent:done`, and close the issue.
 

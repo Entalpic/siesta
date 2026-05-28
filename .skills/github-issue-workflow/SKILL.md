@@ -146,13 +146,11 @@ After a plan is approved and before code changes:
    - `Build authorization`
 2. Transition issue to `agent:blocked` while waiting for explicit user build approval.
 3. Ask for explicit approval to proceed.
-4. Accept only explicit approval intents such as:
-   - `approved to build`
-   - `proceed to build`
-   - `go implement now`
-5. If phrasing is ambiguous or outside this allowlist, ask again. Do not infer intent.
-6. While waiting, send one concise reminder only; do not auto-proceed on timeout.
-7. Move to `agent:building` only after explicit approval.
+4. Accept approval when the user provides an explicitly affirmative intent containing verb language rooted in `build` or `implement` (including standard inflections like `building`, `implemented`).
+5. Treat non-affirmative, speculative, or conditional wording as non-approval (for example: "maybe build", "we could implement later", "if tests pass then build").
+6. If approval is ambiguous, ask one direct confirmation question and do not infer intent.
+7. While waiting, send one concise reminder only; do not auto-proceed on timeout.
+8. Move to `agent:building` only after explicit approval.
 
 ## Managed plan comment
 
@@ -236,7 +234,7 @@ The managed comment **must** be up to date at:
 4. After commit (final status + commit hash).
 5. After merge, before close (final status + merge commit hash).
 
-Between checkpoints, prefer local drafts in `plans/scouting-<slug>.md` or `plans/building-<slug>.md` to limit `gh` traffic.
+Keep checkpoint updates concise. At each checkpoint, update only fields that changed (phase, branch, timestamps, approvals, commit/merge hash, and short risks/findings deltas). Between checkpoints, prefer local drafts in `plans/scouting-<slug>.md` or `plans/building-<slug>.md` to limit `gh` traffic.
 
 For any non-managed issue comment (questions, status notes, branch announcements), append `🤖` as the final non-whitespace character.
 
