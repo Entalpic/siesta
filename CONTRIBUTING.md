@@ -43,12 +43,15 @@ flowchart TD
     end
 
     subgraph build["Build"]
-        G -->|no / after approval| M["Claim: agent:building"]
+        G -->|no| M[Builder runs /grill-with-docs]
         K -->|yes| M
-        M --> N[Implement on declared branch]
-        N --> O["agent:reviewing — critique + adversarial review"]
-        O --> P[One commit with Refs #N]
-        P --> W["Wrap-up: PR, CI, merge (keep agent:building)"]
+        M --> N[Publish grill outcomes + ask build authorization]
+        N --> O["agent:blocked — await explicit build authorization"]
+        O -->|approved| P["Claim: agent:building"]
+        P --> Q[Implement on declared branch]
+        Q --> R1["agent:reviewing — critique + adversarial review"]
+        R1 --> S1[One commit with Refs #N]
+        S1 --> W["Wrap-up: PR, CI, merge (keep agent:building)"]
         W --> X["agent:done + close issue (post-merge)"]
     end
 
@@ -161,8 +164,9 @@ Local files under `plans/` are drafts only; **the issue comment is the source of
 
 **Building**:
 
-- Starts only after explicit plan approval (or when scouting was skipped).
-- Builder claims `agent:building`, implements, runs critique + adversarial review, commits, wraps up through PR merge, then finalizes close-out.
+- Starts only after the builder runs `/grill-with-docs`, publishes grill outcomes, and receives explicit build authorization.
+- If scouting is skipped, the same grill + explicit build authorization gate still applies before claiming `agent:building`.
+- After authorization, builder claims `agent:building`, implements, runs critique + adversarial review, commits, wraps up through PR merge, then finalizes close-out.
 
 If you pick up a **scouted** issue, start from the managed plan comment and **do not** jump straight to implementation — confirm the plan with the user first.
 

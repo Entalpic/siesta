@@ -45,6 +45,9 @@ The rules governing how credential material may enter and leave the CLI: secrets
 ### Wrap-Up Phase
 The post-commit, pre-close phase where branch work is finalized through PR validation and merge while the issue remains in an active building state.
 
+### Builder Grill Gate
+The required pre-build checkpoint where the builder runs `/grill-with-docs`, records grill outcomes and open questions, then requests explicit build authorization. While awaiting approval, the issue remains `agent:blocked`; implementation starts only after explicit authorization.
+
 ### Post-Merge Finalization
 The mandatory issue-close sequence that occurs only after merge succeeds: publish final issue status, transition to `agent:done`, and close the issue.
 

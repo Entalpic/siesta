@@ -90,7 +90,9 @@ When `branch_mode` is `new`, derive the branch **before** substantive work:
 Post the chosen branch name in a short issue comment when first claiming (so humans see it before build):
 
 ```bash
-gh issue comment <num> --body "Branch: \`feat-my-slug\` (new — worktree)"
+gh issue comment <num> --body "Branch: \`feat-my-slug\` (new — worktree)
+
+🤖"
 ```
 
 ### Worktree for `new`
