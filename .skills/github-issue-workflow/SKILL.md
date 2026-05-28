@@ -7,6 +7,11 @@ description: "`gh` mechanics for the `agent:todo` issue lifecycle defined in thi
 
 Implements the lifecycle defined in [`AGENTS.md`](../../AGENTS.md) using GitHub Issues + the `gh` CLI. **This file is the playbook (how); AGENTS.md is the rulebook (what and why).** If they disagree, AGENTS.md wins.
 
+## Operating guardrails
+
+- In the face of uncertainty, refuse the temptation to guess and ask the user.
+- Every agent-authored issue comment or reply must end with `🤖` as the final non-whitespace character.
+
 ## Pre-flight: `gh`
 
 The user must have the `gh` CLI installed and authenticated.
@@ -128,6 +133,25 @@ gh issue edit <num> \
 
 `gh` silently ignores `--remove-label` entries that are not present, so the same remove-list is safe for every transition. **Never include `agent:todo` in the remove list** — the type label is preserved across the lifecycle.
 
+## Builder grill approval gate (before implementation)
+
+After a plan is approved and before code changes:
+
+1. Builder runs `/grill-with-docs` and updates the managed comment with:
+   - `Grill outcomes`
+   - `Open questions (async scout)` (if any remain)
+   - `Approval gate`
+   - `Build authorization`
+2. Transition issue to `agent:blocked` while waiting for explicit user build approval.
+3. Ask for explicit approval to proceed.
+4. Accept only explicit approval intents such as:
+   - `approved to build`
+   - `proceed to build`
+   - `go implement now`
+5. If phrasing is ambiguous or outside this allowlist, ask again. Do not infer intent.
+6. While waiting, send one concise reminder only; do not auto-proceed on timeout.
+7. Move to `agent:building` only after explicit approval.
+
 ## Managed plan comment
 
 Exactly one agent-owned comment per issue, bracketed by stable markers:
@@ -146,7 +170,33 @@ Exactly one agent-owned comment per issue, bracketed by stable markers:
 - Last updated: <ISO date>
 - Commit: <hash> (when applicable)
 
+### Grill outcomes
+
+- Decisions confirmed:
+- Assumptions challenged:
+- Risks noted:
+
+### Open questions (async scout)
+
+- Question:
+  - Recommended answer:
+  - Risk if wrong:
+  - Needs user confirmation:
+
+### Approval gate
+
+- Builder grill completed: yes | no
+- Awaiting explicit build approval: yes | no
+
+### Build authorization
+
+- Approval phrase:
+- Approved by:
+- Approved at:
+
 <!-- agent-plan:end -->
+
+🤖
 ```
 
 ### Find an existing managed comment
@@ -185,6 +235,8 @@ The managed comment **must** be up to date at:
 5. After merge, before close (final status + merge commit hash).
 
 Between checkpoints, prefer local drafts in `plans/scouting-<slug>.md` or `plans/building-<slug>.md` to limit `gh` traffic.
+
+For any non-managed issue comment (questions, status notes, branch announcements), append `🤖` as the final non-whitespace character.
 
 ## Wrap-up integration (post-merge close-out)
 
