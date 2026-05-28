@@ -43,12 +43,16 @@ flowchart TD
     end
 
     subgraph build["Build"]
-        G -->|no / after approval| M["Claim: agent:building"]
+        G -->|no| M[Builder runs /grill-with-docs]
         K -->|yes| M
-        M --> N[Implement on declared branch]
-        N --> O["agent:reviewing — critique + adversarial review"]
-        O --> P[One commit with Refs #N]
-        P --> Q["agent:done + close issue"]
+        M --> N[Publish grill outcomes + ask build authorization]
+        N --> O["agent:blocked — await explicit build authorization"]
+        O -->|approved| P["Claim: agent:building"]
+        P --> Q[Implement on declared branch]
+        Q --> R1["agent:reviewing — critique + adversarial review"]
+        R1 --> S1[One commit with Refs #N]
+        S1 --> W["Wrap-up: PR, CI, merge (keep agent:building)"]
+        W --> X["agent:done + close issue (post-merge)"]
     end
 
     subgraph artifacts["Artifacts"]
@@ -81,7 +85,8 @@ stateDiagram-v2
 
     Building --> Reviewing: implementation done
     Reviewing --> Building: changes requested
-    Reviewing --> Done: commit pushed
+    Reviewing --> Building: commit pushed, wrap-up starts
+    Building --> Done: PR merged + issue finalized
 
     Done --> [*]: issue closed
 
@@ -105,7 +110,7 @@ stateDiagram-v2
 | `agent:blocked` | Paused — typically awaiting plan approval |
 | `agent:building` | Builder implementing (one build per agent session) |
 | `agent:reviewing` | Done coding; critique and security review before commit |
-| `agent:done` | Committed; issue ready to close or already closed |
+| `agent:done` | PR merged; issue finalized and closed (or already closed) |
 
 ## Branch and worktree
 
@@ -133,6 +138,7 @@ Each agent TODO has **exactly one** plan comment on the issue, marked with `<!--
 2. Start of build (plan confirmed)
 3. End of build, before commit (what changed, what was verified)
 4. After commit (final status + commit hash)
+5. After merge, before close (final status + merge commit hash)
 
 Local files under `plans/` are drafts only; **the issue comment is the source of truth**.
 
@@ -158,14 +164,15 @@ Local files under `plans/` are drafts only; **the issue comment is the source of
 
 **Building**:
 
-- Starts only after explicit plan approval (or when scouting was skipped).
-- Builder claims `agent:building`, implements, runs critique + adversarial review, commits, closes.
+- Starts only after the builder runs `/grill-with-docs`, publishes grill outcomes, and receives explicit build authorization.
+- If scouting is skipped, the same grill + explicit build authorization gate still applies before claiming `agent:building`.
+- After authorization, builder claims `agent:building`, implements, runs critique + adversarial review, commits, wraps up through PR merge, then finalizes close-out.
 
 If you pick up a **scouted** issue, start from the managed plan comment and **do not** jump straight to implementation — confirm the plan with the user first.
 
 ## For agents
 
-Read [AGENTS.md](AGENTS.md) at session start. Use [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) for `gh` commands, label transitions, branch naming, and worktree setup.
+Read [AGENTS.md](AGENTS.md) at session start. Use [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) for `gh` commands, label transitions, branch naming, worktree setup, and post-merge issue finalization.
 
 **List open, unclaimed TODOs:**
 
@@ -184,5 +191,5 @@ gh label create "agent:scouting"  --color a2eeef --description "Agent status: sc
 gh label create "agent:building"  --color fbca04 --description "Agent status: building (implementation in progress)"
 gh label create "agent:blocked"   --color d73a4a --description "Agent status: blocked (awaiting user or external)"
 gh label create "agent:reviewing" --color 0075ca --description "Agent status: reviewing (critique pending)"
-gh label create "agent:done"      --color cfd3d7 --description "Agent status: done (committed, ready to close)"
+gh label create "agent:done"      --color cfd3d7 --description "Agent status: done (merged and closed)"
 ```

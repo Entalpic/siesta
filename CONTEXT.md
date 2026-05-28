@@ -41,3 +41,15 @@ The stable public surface for running `siesta` as a command. Behavior and comman
 
 ### Secret Handling Policy
 The rules governing how credential material may enter and leave the CLI: secrets are not accepted via command-line arguments, and plaintext secret output requires explicit interactive confirmation.
+
+### Wrap-Up Phase
+The post-commit, pre-close phase where branch work is finalized through PR validation and merge while the issue remains in an active building state.
+
+### Builder Grill Gate
+The required pre-build checkpoint where the builder runs `/grill-with-docs`, records grill outcomes and open questions, then requests explicit build authorization. While awaiting approval, the issue remains `agent:blocked`; implementation starts only after explicit authorization.
+
+### Post-Merge Finalization
+The mandatory issue-close sequence that occurs only after merge succeeds: publish final issue status, transition to `agent:done`, and close the issue.
+
+### Issue Reference Convention
+The rule that branch commits and PR context use `Refs #<num>` for linkage; issue closure remains an explicit workflow step rather than auto-close keywords.

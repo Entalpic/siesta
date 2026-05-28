@@ -15,12 +15,13 @@ Every work item follows the same cycle:
 3. **Optional clarification** with the user.
 4. **Optional scout** — produce a plan in the issue's managed comment without implementation changes.
 5. **Plan approval** — get explicit user go-ahead before implementing.
-6. **Build** — implement.
-7. **Critique & feedback** — summarize what changed, what was verified, residual risks.
-8. **Adversarial review** - Spawn a sub-agent whose explicit task is to adversarially review the implementation and assess security risks
-9. **Commit** — one issue = one commit, conventional message, `Refs #<num>` in the footer.
-10. **Wrap-up** — when implementation is done, run the `/wrap-up-branch` skill to finalize branch readiness.
-11. **Close** — update the issue with the commit hash, switch label to `agent:done`, close the issue.
+6. **Builder grill gate** — builder runs `/grill-with-docs`, records outcomes/open questions, then explicitly asks permission to proceed. While waiting, keep the issue in `agent:blocked`.
+7. **Build** — implement only after explicit user approval to build.
+8. **Critique & feedback** — summarize what changed, what was verified, residual risks.
+9. **Adversarial review** - Spawn a sub-agent whose explicit task is to adversarially review the implementation and assess security risks
+10. **Commit** — one issue = one commit, conventional message, `Refs #<num>` in the footer.
+11. **Wrap-up** — when implementation is done, run the `/wrap-up-branch` skill through PR merge. Keep `agent:building` during PR/CI/wrap-up.
+12. **Close (post-merge)** — after merge succeeds, update the issue status with the merge commit hash, switch label to `agent:done`, and close the issue.
 
 ## Always-on rules
 
@@ -28,10 +29,12 @@ Every work item follows the same cycle:
 2. **One build at a time.** At most one issue may have `agent:building` per session. If the user asks for a second concurrent build, stop and ask what to do.
 3. **Don't steal claims.** If `agent:scouting` or `agent:building` is already set by another agent, stop and ask the user.
 4. **One issue = one commit** with a clear conventional commit message. Reference the issue (`Refs #<num>`) in the commit footer.
-5. **Plans live in the issue's managed comment.** Local drafts in `plans/` are allowed for noisy iteration but must be published to the comment at four checkpoints: end of scouting, start of build, before commit, after commit.
+5. **Plans live in the issue's managed comment.** Local drafts in `plans/` are allowed for noisy iteration but must be published to the comment at the required lifecycle checkpoints (see the workflow docs). For merged PRs, publish a final post-merge status update before closing.
 6. **GitHub state wins.** When the issue and any local artifact (e.g. `plans/`) disagree, the issue is correct.
 7. **Never publish secrets** into issue bodies or comments — tokens, `.env` contents, `gh auth token` output, credentials, PII, customer data. Treat issues as world-readable until proven otherwise.
-8. **Use wrap-up skill before close.** Follow lifecycle order: run `/wrap-up-branch` after commit/critique and before closing the issue.
+8. **Use wrap-up skill before close.** Follow lifecycle order: run `/wrap-up-branch` after commit/critique and before closing the issue. Wrap-up is not complete until the linked issue is transitioned to `agent:done` and closed.
+9. **Refuse guessing under uncertainty.** In the face of uncertainty, refuse the temptation to guess and ask the user.
+10. **Mark agent-authored issue content.** Every agent-authored issue comment/reply must end with `🤖` as the final non-whitespace character.
 
 ## Worktrees
 
@@ -55,7 +58,9 @@ When multiple scout sub-agents run in parallel, each scout must follow this inte
 - **Branch baseline first.** Scout from the branch declared in the issue body. If no valid branch is declared, default to `main` and explicitly note that fallback in the managed comment.
 - **Worktree when not on main.** If the effective scouting branch is not `main`, use a dedicated worktree for that scout.
 - **Mandatory grilling.** Use the `/grill-with-docs` skill during scouting.
-- **One question at a time.** Ask exactly one clarifying question, include a recommended answer, then stop and wait for the user before continuing.
+- **Asynchronous scouting is allowed.** If user attention is unavailable, do not block scouting; publish unresolved items under `Open questions (async scout)` in the managed comment.
+- **Structured unresolved items.** Each unresolved scouting question must include: `Question`, `Recommended answer`, `Risk if wrong`, `Needs user confirmation`.
+- **One question at a time (live mode).** When actively interviewing the user, ask exactly one clarifying question, include a recommended answer, then wait for the user before continuing.
 - **Track Q&A in GitHub.** Every question/answer turn must be appended to the issue's managed comment so the issue remains the source of truth.
 - **Stay read-only.** Question loops are scouting only: no implementation, docs, or test edits.
 
@@ -65,11 +70,13 @@ If the next pickup is a scouted issue:
 
 - Start from the managed plan comment.
 - **Do not run to build.** The scout did not verify against the live repo; iterate the plan with the user first.
+- **Builder grill is mandatory.** Before implementation, builder must run `/grill-with-docs`, publish `Grill outcomes`, then explicitly ask for build authorization.
+- **Strict approval gate.** If approval wording is ambiguous, do not infer intent; ask again. No implementation starts before explicit approval.
 - If another scout is currently running (`agent:scouting`) on the issue you want, ask the user: wait, take a different issue, or stop.
 
 ## Skills index
 
-- [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) — `gh` mechanics for the `agent:todo` issue lifecycle: claiming, managed plan comments, label transitions.
+- [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) — `gh` mechanics for the `agent:todo` issue lifecycle: claiming, managed plan comments, label transitions, and post-merge close-out.
 - `/wrap-up-branch` — required end-of-task branch finalization workflow once implementation is complete.
 
 ## Local artifacts

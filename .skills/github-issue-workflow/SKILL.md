@@ -7,6 +7,11 @@ description: "`gh` mechanics for the `agent:todo` issue lifecycle defined in thi
 
 Implements the lifecycle defined in [`AGENTS.md`](../../AGENTS.md) using GitHub Issues + the `gh` CLI. **This file is the playbook (how); AGENTS.md is the rulebook (what and why).** If they disagree, AGENTS.md wins.
 
+## Operating guardrails
+
+- In the face of uncertainty, refuse the temptation to guess and ask the user.
+- Every agent-authored issue comment or reply must end with `🤖` as the final non-whitespace character.
+
 ## Pre-flight: `gh`
 
 The user must have the `gh` CLI installed and authenticated.
@@ -38,7 +43,7 @@ No status label means the issue is **unclaimed**.
 | `agent:building`  | A builder is implementing; one per session                          |
 | `agent:blocked`   | Paused awaiting user input or external dependency                   |
 | `agent:reviewing` | Implementation done, awaiting critique/feedback before commit       |
-| `agent:done`      | Committed and ready to close (or already closed)                    |
+| `agent:done`      | PR merged; post-merge issue finalization complete (or already closed) |
 
 ### Bootstrap (one-time per repo)
 
@@ -48,7 +53,7 @@ gh label create "agent:scouting"  --color a2eeef --description "Agent status: sc
 gh label create "agent:building"  --color fbca04 --description "Agent status: building (implementation in progress)"
 gh label create "agent:blocked"   --color d73a4a --description "Agent status: blocked (awaiting user or external)"
 gh label create "agent:reviewing" --color 0075ca --description "Agent status: reviewing (critique pending)"
-gh label create "agent:done"      --color cfd3d7 --description "Agent status: done (committed, ready to close)"
+gh label create "agent:done"      --color cfd3d7 --description "Agent status: done (merged and closed)"
 ```
 
 ## Branch (required on every agent TODO)
@@ -85,7 +90,9 @@ When `branch_mode` is `new`, derive the branch **before** substantive work:
 Post the chosen branch name in a short issue comment when first claiming (so humans see it before build):
 
 ```bash
-gh issue comment <num> --body "Branch: \`feat-my-slug\` (new — worktree)"
+gh issue comment <num> --body "Branch: \`feat-my-slug\` (new — worktree)
+
+🤖"
 ```
 
 ### Worktree for `new`
@@ -128,6 +135,25 @@ gh issue edit <num> \
 
 `gh` silently ignores `--remove-label` entries that are not present, so the same remove-list is safe for every transition. **Never include `agent:todo` in the remove list** — the type label is preserved across the lifecycle.
 
+## Builder grill approval gate (before implementation)
+
+After a plan is approved and before code changes:
+
+1. Builder runs `/grill-with-docs` and updates the managed comment with:
+   - `Grill outcomes`
+   - `Open questions (async scout)` (if any remain)
+   - `Approval gate`
+   - `Build authorization`
+2. Transition issue to `agent:blocked` while waiting for explicit user build approval.
+3. Ask for explicit approval to proceed.
+4. Accept only explicit approval intents such as:
+   - `approved to build`
+   - `proceed to build`
+   - `go implement now`
+5. If phrasing is ambiguous or outside this allowlist, ask again. Do not infer intent.
+6. While waiting, send one concise reminder only; do not auto-proceed on timeout.
+7. Move to `agent:building` only after explicit approval.
+
 ## Managed plan comment
 
 Exactly one agent-owned comment per issue, bracketed by stable markers:
@@ -146,7 +172,33 @@ Exactly one agent-owned comment per issue, bracketed by stable markers:
 - Last updated: <ISO date>
 - Commit: <hash> (when applicable)
 
+### Grill outcomes
+
+- Decisions confirmed:
+- Assumptions challenged:
+- Risks noted:
+
+### Open questions (async scout)
+
+- Question:
+  - Recommended answer:
+  - Risk if wrong:
+  - Needs user confirmation:
+
+### Approval gate
+
+- Builder grill completed: yes | no
+- Awaiting explicit build approval: yes | no
+
+### Build authorization
+
+- Approval phrase:
+- Approved by:
+- Approved at:
+
 <!-- agent-plan:end -->
+
+🤖
 ```
 
 ### Find an existing managed comment
@@ -182,12 +234,20 @@ The managed comment **must** be up to date at:
 2. Start of build (plan confirmed).
 3. End of build, before commit (critique + verification summary).
 4. After commit (final status + commit hash).
+5. After merge, before close (final status + merge commit hash).
 
 Between checkpoints, prefer local drafts in `plans/scouting-<slug>.md` or `plans/building-<slug>.md` to limit `gh` traffic.
 
-## Closing an issue
+For any non-managed issue comment (questions, status notes, branch announcements), append `🤖` as the final non-whitespace character.
 
-After commit:
+## Wrap-up integration (post-merge close-out)
+
+Keep `agent:building` during PR open, CI, and merge. After PR merge succeeds, run this close-out sequence:
+
+1. Resolve linked issue from the branch work item (`Refs #<num>` convention; avoid `Closes #<num>` automation).
+2. Update the managed comment one last time with `Phase: done` and `Commit: <merge_sha>`.
+3. Transition status labels to `agent:done` (removing other `agent:*` status labels).
+4. Close the issue as completed.
 
 ```bash
 gh issue edit <num> \
@@ -196,7 +256,9 @@ gh issue edit <num> \
 gh issue close <num> --reason completed
 ```
 
-Update the managed comment one last time with `Commit: <hash>` in the Status block before closing. The `agent:todo` label remains on the closed issue (useful for `gh issue list --state closed --label agent:todo`).
+## Closing an issue
+
+Only close after merge has succeeded and the post-merge close-out sequence above is complete. The `agent:todo` label remains on the closed issue (useful for `gh issue list --state closed --label agent:todo`).
 
 ## Conflict resolution
 
@@ -205,7 +267,7 @@ GitHub state wins (AGENTS.md rule 6). Edge cases:
 | Conflict                                       | Resolution                                |
 | ---------------------------------------------- | ----------------------------------------- |
 | Two managed comments found on one issue        | Stop. Ask user which to keep.             |
-| Local `plans/built-*.md` but issue still open  | Sync: close the issue with commit info.   |
+| Local `plans/built-*.md` but issue still open  | Sync post-merge: update issue with merge hash, set `agent:done`, close. |
 | Local `plans/scouted-*.md` but no issue exists | Ask whether to create the issue.          |
 
 ## `gh` cheat sheet
@@ -220,6 +282,7 @@ GitHub state wins (AGENTS.md rule 6). Edge cases:
 | Atomic label transition       | `gh issue edit <num> --add-label "<a>" --remove-label "<b>,<c>"`                                      |
 | Create plan comment           | `gh issue comment <num> --body-file plan.md`                                                          |
 | Edit comment in place         | `gh api --method PATCH /repos/<o>/<r>/issues/comments/<id> -f body="$(cat plan.md)"`                  |
+| Post-merge close-out          | `gh issue edit <num> --add-label "agent:done" --remove-label "agent:scouting,agent:building,agent:blocked,agent:reviewing" && gh issue close <num> --reason completed` |
 | Close as completed            | `gh issue close <num> --reason completed`                                                             |
 | Check repo visibility         | `gh repo view --json visibility`                                                                      |
 
