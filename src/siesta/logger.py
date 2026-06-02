@@ -227,6 +227,60 @@ class Logger(BaseLogger):
             raise KeyboardInterrupt()
         return response
 
+    def checkbox(self, message: str, choices: list[str]) -> list[str]:
+        """Prompt the user to select zero or more items from a list.
+
+        Parameters
+        ----------
+        message : str
+            The message to display above the checkbox list.
+        choices : list[str]
+            The available choices.
+
+        Returns
+        -------
+        list[str]
+            The selected items (may be empty).
+
+        Raises
+        ------
+        KeyboardInterrupt
+            If the prompt is cancelled (for example with Ctrl+C).
+        """
+        response = questionary.checkbox(
+            f"{self.prefix}{message}", choices=choices
+        ).ask()
+        if response is None:
+            raise KeyboardInterrupt()
+        return response
+
+    def select(self, message: str, choices: list[str]) -> str:
+        """Prompt the user to select exactly one item from a list.
+
+        Parameters
+        ----------
+        message : str
+            The message to display above the selection list.
+        choices : list[str]
+            The available choices.
+
+        Returns
+        -------
+        str
+            The selected item.
+
+        Raises
+        ------
+        KeyboardInterrupt
+            If the prompt is cancelled (for example with Ctrl+C).
+        """
+        response = questionary.select(
+            f"{self.prefix}{message}", choices=choices
+        ).ask()
+        if response is None:
+            raise KeyboardInterrupt()
+        return response
+
     def confirm_secret(self, message: str) -> bool:
         """Confirm a secret-related action with fail-closed semantics.
 

@@ -1,0 +1,15 @@
+---
+description: Enforce NumPy docstrings with RST examples for Python code
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Docstrings
+
+Use NumPy-style docstrings with `.rst` flavor code blocks.
+
+Each docstring should include a brief example that shows how to invoke the
+function or instantiate the class in question.
+
+Always respect the line character limit specified in the project's
+`pyproject.toml` file.

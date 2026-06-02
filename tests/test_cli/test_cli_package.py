@@ -8,6 +8,7 @@ from pathlib import Path
 from cyclopts import App
 
 from siesta.cli import main
+from siesta.cli.agents_app import agents_app, add_constitution, add_rule, add_skill
 from siesta.cli.docs_app import build_docs, docs_app, init_docs
 from siesta.cli.main_app import app
 from siesta.cli.project_app import project_app, quickstart_project, setup_tests
@@ -53,7 +54,7 @@ def _command_names(root_app: App) -> set[str]:
 
 def test_root_app_registers_domain_apps():
     assert isinstance(app, App)
-    assert _command_names(app) == {"docs", "project", "self"}
+    assert _command_names(app) == {"agents", "docs", "project", "self"}
 
 
 def test_docs_app_registers_leaf_commands():
@@ -85,6 +86,16 @@ def test_tab_completions_app_registers_leaf_commands():
     }
 
 
+def test_agents_app_registers_commands():
+    assert _command_names(agents_app) == {"add-skill", "add-rule", "add-constitution"}
+
+
+def test_agents_app_exposes_command_callables():
+    assert callable(add_skill)
+    assert callable(add_rule)
+    assert callable(add_constitution)
+
+
 def test_domain_modules_expose_command_callables():
     assert callable(init_docs)
     assert callable(build_docs)
@@ -103,6 +114,7 @@ def test_cli_domain_modules_import_without_cycles():
 
     for module_name in (
         "siesta.cli.main_app",
+        "siesta.cli.agents_app",
         "siesta.cli.docs_app",
         "siesta.cli.project_app",
         "siesta.cli.self_app",

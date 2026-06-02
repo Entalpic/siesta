@@ -6,6 +6,7 @@ from textwrap import dedent
 
 from cyclopts import App
 
+from siesta.cli.agents_app import agents_app
 from siesta.cli.docs_app import docs_app
 from siesta.cli.project_app import project_app
 from siesta.cli.self_app import self_app
@@ -28,6 +29,7 @@ app = App(
 )
 """:py:class:`cyclopts.App`: The main CLI application."""
 
+app.command(agents_app)
 app.command(docs_app)
 app.command(project_app)
 app.command(self_app)
@@ -65,4 +67,4 @@ def main():
                 logger.print(update_msg)
 
 
-__all__ = ["app", "docs_app", "project_app", "self_app", "main"]
+__all__ = ["app", "agents_app", "docs_app", "project_app", "self_app", "main"]
