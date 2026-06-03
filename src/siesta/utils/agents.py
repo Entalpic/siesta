@@ -14,10 +14,7 @@ from pathlib import Path
 
 from ruamel.yaml import YAML
 
-from siesta.logger import Logger
-
-logger = Logger("siesta")
-"""A logger to log messages to the console."""
+from siesta.utils.common import logger
 
 # ---------------------------------------------------------------------------
 # Catalog root
