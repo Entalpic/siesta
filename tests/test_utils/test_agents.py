@@ -12,6 +12,7 @@ from siesta.utils.agents import (
     DEFAULT_CONSTITUTION,
     IMPORT_LINE,
     _split_frontmatter,
+    _split_globs,
     available_constitutions,
     available_rules,
     available_skills,
@@ -218,6 +219,39 @@ class TestMdcToClaude:
         assert "alwaysApply" not in result
         assert "description" not in result
 
+    def test_brace_glob_kept_intact(self):
+        # A single brace-expansion glob must not be split on its inner comma.
+        text = "---\nglobs: '**/*.{py,js}'\nalwaysApply: false\n---\n\n# Body"
+        result = mdc_to_claude(text)
+        fm, _ = _split_frontmatter(result)
+        assert fm["paths"] == ["**/*.{py,js}"]
+
+    def test_brace_glob_mixed_with_list(self):
+        # Top-level commas separate; brace groups stay intact.
+        text = "---\nglobs: 'a.py,**/*.{ts,tsx}'\nalwaysApply: false\n---\n\n# Body"
+        result = mdc_to_claude(text)
+        fm, _ = _split_frontmatter(result)
+        assert fm["paths"] == ["a.py", "**/*.{ts,tsx}"]
+
+    def test_glob_with_quote_is_valid_yaml(self):
+        # A glob containing a double-quote must round-trip as valid YAML.
+        weird = '**/*".py'
+        text = f"---\nglobs: '{weird}'\nalwaysApply: false\n---\n\n# Body"
+        result = mdc_to_claude(text)
+        fm, _ = _split_frontmatter(result)
+        assert fm["paths"] == [weird]
+
+
+class TestSplitGlobs:
+    def test_plain_comma_list(self):
+        assert _split_globs("a,b,c") == ["a", "b", "c"]
+
+    def test_brace_group_not_split(self):
+        assert _split_globs("**/*.{py,js}") == ["**/*.{py,js}"]
+
+    def test_strips_whitespace_and_drops_empties(self):
+        assert _split_globs(" a , , b ") == ["a", "b"]
+
 
 # ---------------------------------------------------------------------------
 # Selection resolution
@@ -252,6 +286,12 @@ class TestResolveSelection:
         monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
         with pytest.raises(SystemExit):
             resolve_selection([], False, ["a"], False, "rule")
+
+    def test_interactive_without_tty_aborts(self, monkeypatch):
+        # Explicit -i with no terminal must abort, not fall through to a prompt.
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        with pytest.raises(SystemExit):
+            resolve_selection([], False, ["a"], True, "rule")
 
 
 # ---------------------------------------------------------------------------
