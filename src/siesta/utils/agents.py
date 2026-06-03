@@ -496,9 +496,9 @@ def write_dir(
     action = _decide_action(dest, force, backup, interactive, display)
     if action == "skip":
         return "skip"
-    if action == "backup_write" and dest.exists():
+    if action == "backup_write":
         _apply_backup(dest)
-    elif action == "overwrite" and dest.exists():
+    elif action == "overwrite":
         shutil.rmtree(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(str(src), str(dest))
