@@ -6,6 +6,7 @@ rule translation, conflict-aware file writing, and the constitution install
 algorithm.
 """
 
+import json
 import shutil
 import sys
 from importlib.resources import files
@@ -212,6 +213,42 @@ def _split_frontmatter(text: str) -> tuple[dict, str]:
     return fm, body.lstrip("\n")
 
 
+def _split_globs(value: str) -> list[str]:
+    """Split a Cursor ``globs`` string into individual patterns.
+
+    Cursor uses commas to separate multiple globs, but a single brace-expansion
+    glob (e.g. ``**/*.{py,js}``) also contains commas. Split only on commas at
+    brace-nesting depth 0 so brace groups stay intact.
+
+    Parameters
+    ----------
+    value : str
+        Raw comma-separated ``globs`` value.
+
+    Returns
+    -------
+    list[str]
+        Individual glob patterns, stripped of surrounding whitespace.
+    """
+    patterns: list[str] = []
+    depth = 0
+    current = ""
+    for char in value:
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth = max(0, depth - 1)
+        if char == "," and depth == 0:
+            if current.strip():
+                patterns.append(current.strip())
+            current = ""
+        else:
+            current += char
+    if current.strip():
+        patterns.append(current.strip())
+    return patterns
+
+
 def mdc_to_claude(text: str) -> str:
     """Translate a Cursor ``.mdc`` rule to Claude ``.md`` format.
 
@@ -240,11 +277,17 @@ def mdc_to_claude(text: str) -> str:
     paths: list[str] | None = None
     if not always and globs:
         if isinstance(globs, str):
-            paths = [g.strip() for g in globs.split(",") if g.strip()]
+            paths = _split_globs(globs)
         elif isinstance(globs, list):
             paths = [str(g) for g in globs]
     if paths:
-        front = "---\npaths:\n" + "".join(f'  - "{p}"\n' for p in paths) + "---\n\n"
+        # json.dumps produces a valid double-quoted YAML scalar, escaping any
+        # quotes/backslashes a glob might contain.
+        front = (
+            "---\npaths:\n"
+            + "".join(f"  - {json.dumps(p)}\n" for p in paths)
+            + "---\n\n"
+        )
         return front + body
     return body
 
