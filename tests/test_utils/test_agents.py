@@ -12,6 +12,7 @@ from siesta.utils.agents import (
     DEFAULT_CONSTITUTION,
     IMPORT_LINE,
     _split_frontmatter,
+    _split_globs,
     available_constitutions,
     available_rules,
     available_skills,
@@ -155,7 +156,9 @@ class TestSplitFrontmatter:
         assert body == "# Hello\nworld"
 
     def test_parses_frontmatter(self):
-        text = "---\ndescription: foo\nglobs: '**/*.py'\nalwaysApply: false\n---\n\n# Body"
+        text = (
+            "---\ndescription: foo\nglobs: '**/*.py'\nalwaysApply: false\n---\n\n# Body"
+        )
         fm, body = _split_frontmatter(text)
         assert fm["description"] == "foo"
         assert fm["globs"] == "**/*.py"
@@ -176,7 +179,9 @@ class TestMdcToClaude:
         assert "# Body" in result
 
     def test_globs_string_becomes_paths_list(self):
-        text = "---\ndescription: x\nglobs: '**/*.py'\nalwaysApply: false\n---\n\n# Body"
+        text = (
+            "---\ndescription: x\nglobs: '**/*.py'\nalwaysApply: false\n---\n\n# Body"
+        )
         result = mdc_to_claude(text)
         assert "paths:" in result
         assert '"**/*.py"' in result
@@ -214,6 +219,39 @@ class TestMdcToClaude:
         assert "alwaysApply" not in result
         assert "description" not in result
 
+    def test_brace_glob_kept_intact(self):
+        # A single brace-expansion glob must not be split on its inner comma.
+        text = "---\nglobs: '**/*.{py,js}'\nalwaysApply: false\n---\n\n# Body"
+        result = mdc_to_claude(text)
+        fm, _ = _split_frontmatter(result)
+        assert fm["paths"] == ["**/*.{py,js}"]
+
+    def test_brace_glob_mixed_with_list(self):
+        # Top-level commas separate; brace groups stay intact.
+        text = "---\nglobs: 'a.py,**/*.{ts,tsx}'\nalwaysApply: false\n---\n\n# Body"
+        result = mdc_to_claude(text)
+        fm, _ = _split_frontmatter(result)
+        assert fm["paths"] == ["a.py", "**/*.{ts,tsx}"]
+
+    def test_glob_with_quote_is_valid_yaml(self):
+        # A glob containing a double-quote must round-trip as valid YAML.
+        weird = '**/*".py'
+        text = f"---\nglobs: '{weird}'\nalwaysApply: false\n---\n\n# Body"
+        result = mdc_to_claude(text)
+        fm, _ = _split_frontmatter(result)
+        assert fm["paths"] == [weird]
+
+
+class TestSplitGlobs:
+    def test_plain_comma_list(self):
+        assert _split_globs("a,b,c") == ["a", "b", "c"]
+
+    def test_brace_group_not_split(self):
+        assert _split_globs("**/*.{py,js}") == ["**/*.{py,js}"]
+
+    def test_strips_whitespace_and_drops_empties(self):
+        assert _split_globs(" a , , b ") == ["a", "b"]
+
 
 # ---------------------------------------------------------------------------
 # Selection resolution
@@ -223,8 +261,11 @@ class TestMdcToClaude:
 class TestResolveSelection:
     def test_explicit_names(self):
         result = resolve_selection(
-            ["python-docstrings"], False, ["python-docstrings", "mirror-providers"],
-            False, "rule"
+            ["python-docstrings"],
+            False,
+            ["python-docstrings", "mirror-providers"],
+            False,
+            "rule",
         )
         assert result == ["python-docstrings"]
 
@@ -245,6 +286,12 @@ class TestResolveSelection:
         monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
         with pytest.raises(SystemExit):
             resolve_selection([], False, ["a"], False, "rule")
+
+    def test_interactive_without_tty_aborts(self, monkeypatch):
+        # Explicit -i with no terminal must abort, not fall through to a prompt.
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        with pytest.raises(SystemExit):
+            resolve_selection([], False, ["a"], True, "rule")
 
 
 # ---------------------------------------------------------------------------
@@ -343,8 +390,12 @@ class TestInstallSkill:
         monkeypatch.chdir(tmp_path)
         summary = install_skill("grill-with-docs", ["cursor", "claude"], "local")
         assert len(summary["written"]) == 2
-        assert (tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md").exists()
-        assert (tmp_path / ".claude" / "skills" / "grill-with-docs" / "SKILL.md").exists()
+        assert (
+            tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
+        ).exists()
+        assert (
+            tmp_path / ".claude" / "skills" / "grill-with-docs" / "SKILL.md"
+        ).exists()
 
     def test_skips_existing_cursor(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -401,9 +452,7 @@ class TestInstallRule:
 class TestInstallConstitution:
     def test_both_providers_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        summary = install_constitution(
-            DEFAULT_CONSTITUTION, ["cursor", "claude"], "local"
-        )
+        install_constitution(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")
         assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "CLAUDE.md").exists()
         assert (tmp_path / "CLAUDE.md").read_text().strip() == IMPORT_LINE
@@ -422,9 +471,7 @@ class TestInstallConstitution:
 
     def test_global_cursor_only_warns_and_skips(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        summary = install_constitution(
-            DEFAULT_CONSTITUTION, ["cursor"], "global"
-        )
+        summary = install_constitution(DEFAULT_CONSTITUTION, ["cursor"], "global")
         assert not (tmp_path / "AGENTS.md").exists()
         assert summary["written"] == []
 
@@ -446,17 +493,13 @@ class TestInstallConstitution:
     def test_existing_agents_md_overwritten_with_force(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "AGENTS.md").write_text("old")
-        install_constitution(
-            DEFAULT_CONSTITUTION, ["cursor"], "local", force=True
-        )
+        install_constitution(DEFAULT_CONSTITUTION, ["cursor"], "local", force=True)
         assert (tmp_path / "AGENTS.md").read_text() != "old"
 
     def test_existing_claude_md_already_has_import_no_op(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "CLAUDE.md").write_text(f"{IMPORT_LINE}\n\nExtra content")
-        install_constitution(
-            DEFAULT_CONSTITUTION, ["claude"], "local"
-        )
+        install_constitution(DEFAULT_CONSTITUTION, ["claude"], "local")
         content = (tmp_path / "CLAUDE.md").read_text()
         assert content.count(IMPORT_LINE) == 1
 
@@ -511,7 +554,9 @@ class TestInstallQuickstart:
     def test_installs_all_kinds_both_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         install_quickstart(["cursor", "claude"], "local")
-        assert (tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md").exists()
+        assert (
+            tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
+        ).exists()
         assert (tmp_path / ".cursor" / "rules" / "python-docstrings.mdc").exists()
         assert (tmp_path / ".claude" / "rules" / "mirror-providers.md").exists()
         assert (tmp_path / "AGENTS.md").exists()

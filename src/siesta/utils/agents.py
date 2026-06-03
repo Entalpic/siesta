@@ -6,6 +6,7 @@ rule translation, conflict-aware file writing, and the constitution install
 algorithm.
 """
 
+import json
 import shutil
 import sys
 from importlib.resources import files
@@ -13,10 +14,7 @@ from pathlib import Path
 
 from ruamel.yaml import YAML
 
-from siesta.logger import Logger
-
-logger = Logger("siesta")
-"""A logger to log messages to the console."""
+from siesta.utils.common import logger
 
 # ---------------------------------------------------------------------------
 # Catalog root
@@ -57,9 +55,7 @@ def available_rules() -> list[str]:
     list[str]
         Sorted list of rule names.
     """
-    return sorted(
-        p.name[:-4] for p in RULES_DIR.iterdir() if p.name.endswith(".mdc")
-    )
+    return sorted(p.name[:-4] for p in RULES_DIR.iterdir() if p.name.endswith(".mdc"))
 
 
 def available_constitutions() -> list[str]:
@@ -214,6 +210,42 @@ def _split_frontmatter(text: str) -> tuple[dict, str]:
     return fm, body.lstrip("\n")
 
 
+def _split_globs(value: str) -> list[str]:
+    """Split a Cursor ``globs`` string into individual patterns.
+
+    Cursor uses commas to separate multiple globs, but a single brace-expansion
+    glob (e.g. ``**/*.{py,js}``) also contains commas. Split only on commas at
+    brace-nesting depth 0 so brace groups stay intact.
+
+    Parameters
+    ----------
+    value : str
+        Raw comma-separated ``globs`` value.
+
+    Returns
+    -------
+    list[str]
+        Individual glob patterns, stripped of surrounding whitespace.
+    """
+    patterns: list[str] = []
+    depth = 0
+    current = ""
+    for char in value:
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth = max(0, depth - 1)
+        if char == "," and depth == 0:
+            if current.strip():
+                patterns.append(current.strip())
+            current = ""
+        else:
+            current += char
+    if current.strip():
+        patterns.append(current.strip())
+    return patterns
+
+
 def mdc_to_claude(text: str) -> str:
     """Translate a Cursor ``.mdc`` rule to Claude ``.md`` format.
 
@@ -242,11 +274,17 @@ def mdc_to_claude(text: str) -> str:
     paths: list[str] | None = None
     if not always and globs:
         if isinstance(globs, str):
-            paths = [g.strip() for g in globs.split(",") if g.strip()]
+            paths = _split_globs(globs)
         elif isinstance(globs, list):
             paths = [str(g) for g in globs]
     if paths:
-        front = "---\npaths:\n" + "".join(f'  - "{p}"\n' for p in paths) + "---\n\n"
+        # json.dumps produces a valid double-quoted YAML scalar, escaping any
+        # quotes/backslashes a glob might contain.
+        front = (
+            "---\npaths:\n"
+            + "".join(f"  - {json.dumps(p)}\n" for p in paths)
+            + "---\n\n"
+        )
         return front + body
     return body
 
@@ -294,11 +332,14 @@ def resolve_selection(
     if names:
         unknown = [n for n in names if n not in available]
         if unknown:
-            logger.abort(
-                f"Unknown {kind}(s): {unknown}. Available: {available}"
-            )
+            logger.abort(f"Unknown {kind}(s): {unknown}. Available: {available}")
         return list(names)
-    if not (interactive or sys.stdin.isatty()):
+    # Interactive selection needs a real terminal, regardless of how it was
+    # requested. An explicit -i with no TTY is a broken invocation worth
+    # surfacing rather than letting questionary hang or crash.
+    if not sys.stdin.isatty():
+        if interactive:
+            logger.abort("Interactive selection requires a terminal (no TTY).")
         logger.abort(
             f"No {kind}s specified. Pass names, --all, or use -i for interactive mode."
         )
@@ -455,9 +496,9 @@ def write_dir(
     action = _decide_action(dest, force, backup, interactive, display)
     if action == "skip":
         return "skip"
-    if action == "backup_write" and dest.exists():
+    if action == "backup_write":
         _apply_backup(dest)
-    elif action == "overwrite" and dest.exists():
+    elif action == "overwrite":
         shutil.rmtree(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(str(src), str(dest))
@@ -630,7 +671,7 @@ def install_constitution(
         force=force,
         backup=backup,
         interactive=interactive,
-        label=f"AGENTS.md",
+        label="AGENTS.md",
     )
     _record(summary, action, str(agents_dest))
     if action != "skip":
@@ -707,9 +748,7 @@ def _handle_claude_import(
         )
 
     if do_prepend:
-        claude_dest.write_text(
-            f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8"
-        )
+        claude_dest.write_text(f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8")
         summary["written"].append(str(claude_dest) + " (import prepended)")
 
 
@@ -804,17 +843,28 @@ def install_quickstart(
     # Execution phase: install each category, merging results into one summary.
     combined: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
     for name in cfg["skills"]:
-        result = install_skill(name, providers, scope, force=force, backup=backup, interactive=interactive)
+        result = install_skill(
+            name, providers, scope, force=force, backup=backup, interactive=interactive
+        )
         for key in combined:
             combined[key].extend(result.get(key, []))
 
     for name in cfg["rules"]:
-        result = install_rule(name, providers, scope, force=force, backup=backup, interactive=interactive)
+        result = install_rule(
+            name, providers, scope, force=force, backup=backup, interactive=interactive
+        )
         for key in combined:
             combined[key].extend(result.get(key, []))
 
     if cfg["constitution"]:
-        result = install_constitution(cfg["constitution"], providers, scope, force=force, backup=backup, interactive=interactive)
+        result = install_constitution(
+            cfg["constitution"],
+            providers,
+            scope,
+            force=force,
+            backup=backup,
+            interactive=interactive,
+        )
         for key in combined:
             combined[key].extend(result.get(key, []))
 

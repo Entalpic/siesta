@@ -211,9 +211,7 @@ def quickstart_project(
         docs = logger.confirm("Would you like to initialize the docs?")
 
     if agents is None:
-        agents = logger.confirm(
-            "Would you like to install recommended agent assets?"
-        )
+        agents = logger.confirm("Would you like to install recommended agent assets?")
 
     docs_with_uv: bool | None = None
     if docs and deps:
@@ -305,7 +303,11 @@ def quickstart_project(
         )
 
     if agents:
-        summary = install_quickstart(["cursor", "claude"], "local", force=overwrite)
+        # Back up existing agent files when overwriting so a user-authored
+        # CLAUDE.md/AGENTS.md is recoverable from a .bak.
+        summary = install_quickstart(
+            ["cursor", "claude"], "local", force=overwrite, backup=overwrite
+        )
         print_summary(summary)
         logger.info("Agent assets installed.")
 

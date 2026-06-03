@@ -1,6 +1,46 @@
 # Agents
 
-This repository coordinates agent work through **GitHub Issues as the shared source of truth**. Read this file at the start of every session.
+## Working Principles
+
+**Apply these universally, on every task.**
+
+### 1. Think Before Coding
+
+State your assumptions explicitly. If multiple interpretations exist, present them — don't pick silently. If a simpler approach exists, say so. If something is unclear, stop and ask.
+
+Read `system-architecture.md` first to understand repository structure and boundaries before broad searching. Treat it as the source of truth for architecture; when a task changes components, boundaries, or data flow, update it in the same task.
+
+Before implementing (and whenever a request is vague), use the `grill-with-docs` skill to stress-test the plan against the project's domain language and documented decisions (`CONTEXT.md`, ADRs).
+
+### 2. Simplicity First
+
+Minimum code that solves the problem. Nothing speculative. No features beyond what was asked, no abstractions for single-use code, no error handling for impossible scenarios.
+
+### 3. Surgical Changes
+
+Touch only what you must. Don't "improve" adjacent code, comments, or formatting. Match existing style. Every changed line should trace directly to the user's request. Remove imports/variables/functions that *your* changes made unused; leave pre-existing dead code alone.
+
+### 4. One Artifact Owns Each Piece of Guidance
+
+Three artifacts carry agent guidance, each owning a distinct slice:
+
+- **Constitution** (`AGENTS.md`): always loaded, applies to every task. Owns global principles only. Keep it thin.
+- **Rule** (`.cursor/rules/*.mdc`, `.claude/rules/*.md`): loaded by file glob/path. Owns constraints tied to a specific technology or directory.
+- **Skill** (`SKILL.md` directory): invoked on demand. Owns multi-step procedures and workflows.
+
+Never duplicate guidance across artifacts. When guidance is a procedure, move it into a Skill and reference it from here.
+
+### 5. Security and Consistency
+
+Treat secrets exposure as critical: API keys, tokens, passwords, credentials, webhook URLs, `.env` contents. Never hardcode secrets in code, tests, docs, examples, commits, or PR text. If you detect a leak or high-risk pattern, stop and warn clearly — even when it is outside the original request.
+
+Before declaring completion: (1) run a secret/leak/security scan, (2) verify every changed line traces to the user's request, (3) check consistency against `CONTEXT.md`, `CONTEXT-MAP.md`, and relevant ADRs.
+
+---
+
+## GitHub Issue Workflow
+
+This repository coordinates agent work through **GitHub Issues as the shared source of truth**.
 
 For the `gh` mechanics that implement this discipline (labels, managed-comment markers, command syntax), follow [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md).
 

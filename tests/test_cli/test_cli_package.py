@@ -51,11 +51,7 @@ def _subapp_names(root_app: App) -> set[str]:
 
 def _command_names(root_app: App) -> set[str]:
     """Return user-facing command names registered on a Cyclopts app."""
-    return {
-        name
-        for name in root_app._commands
-        if not name.startswith("-")
-    }
+    return {name for name in root_app._commands if not name.startswith("-")}
 
 
 def test_root_app_registers_domain_apps():
@@ -93,7 +89,12 @@ def test_tab_completions_app_registers_leaf_commands():
 
 
 def test_agents_app_registers_commands():
-    assert _command_names(agents_app) == {"add-skill", "add-rule", "add-constitution", "quickstart"}
+    assert _command_names(agents_app) == {
+        "add-skill",
+        "add-rule",
+        "add-constitution",
+        "quickstart",
+    }
 
 
 def test_agents_app_exposes_command_callables():

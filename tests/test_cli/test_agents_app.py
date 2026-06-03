@@ -8,13 +8,9 @@ are isolated.
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
-
-import pytest
 
 from siesta.cli.main_app import app
-from siesta.utils.agents import DEFAULT_CONSTITUTION, IMPORT_LINE
-
+from siesta.utils.agents import IMPORT_LINE
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,14 +58,10 @@ class TestAddSkill:
 
         run("agents", "add-skill", "--all", "--cursor")
         for skill in available_skills():
-            assert (
-                tmp_path_chdir / ".cursor" / "skills" / skill
-            ).is_dir()
+            assert (tmp_path_chdir / ".cursor" / "skills" / skill).is_dir()
 
     def test_all_and_names_mutual_exclusion(self, tmp_path_chdir):
-        code = run(
-            "agents", "add-skill", "grill-with-docs", "--all", "--cursor"
-        )
+        code = run("agents", "add-skill", "grill-with-docs", "--all", "--cursor")
         assert code != 0
 
     def test_unknown_skill_name_aborts(self, tmp_path_chdir):
@@ -121,15 +113,11 @@ class TestAddSkill:
 class TestAddRule:
     def test_cursor_rule_is_mdc(self, tmp_path_chdir):
         run("agents", "add-rule", "python-docstrings", "--cursor")
-        assert (
-            tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
-        ).exists()
+        assert (tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc").exists()
 
     def test_claude_rule_is_md(self, tmp_path_chdir):
         run("agents", "add-rule", "python-docstrings", "--claude")
-        assert (
-            tmp_path_chdir / ".claude" / "rules" / "python-docstrings.md"
-        ).exists()
+        assert (tmp_path_chdir / ".claude" / "rules" / "python-docstrings.md").exists()
 
     def test_claude_rule_translated_has_paths(self, tmp_path_chdir):
         run("agents", "add-rule", "python-docstrings", "--claude")
@@ -151,9 +139,7 @@ class TestAddRule:
 
         run("agents", "add-rule", "--all", "--cursor")
         for rule in available_rules():
-            assert (
-                tmp_path_chdir / ".cursor" / "rules" / f"{rule}.mdc"
-            ).exists()
+            assert (tmp_path_chdir / ".cursor" / "rules" / f"{rule}.mdc").exists()
 
     def test_unknown_rule_aborts(self, tmp_path_chdir):
         code = run("agents", "add-rule", "nonexistent-rule", "--cursor")
@@ -240,9 +226,7 @@ class TestAddConstitution:
         assert (tmp_path_chdir / "AGENTS.md.bak").read_text() == "old agents"
 
     def test_local_and_global_abort(self, tmp_path_chdir):
-        code = run(
-            "agents", "add-constitution", "--local", "--global"
-        )
+        code = run("agents", "add-constitution", "--local", "--global")
         assert code != 0
 
 
@@ -254,7 +238,9 @@ class TestAddConstitution:
 class TestQuickstart:
     def test_quickstart_installs_all_both_local(self, tmp_path_chdir):
         run("agents", "quickstart", "--both", "--local")
-        assert (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md").exists()
+        assert (
+            tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
+        ).exists()
         assert (tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc").exists()
         assert (tmp_path_chdir / ".claude" / "rules" / "mirror-providers.md").exists()
         assert (tmp_path_chdir / "AGENTS.md").exists()
@@ -262,7 +248,9 @@ class TestQuickstart:
 
     def test_quickstart_cursor_only(self, tmp_path_chdir):
         run("agents", "quickstart", "--cursor")
-        assert (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md").exists()
+        assert (
+            tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
+        ).exists()
         assert not (tmp_path_chdir / ".claude" / "skills").exists()
 
     def test_quickstart_force_overwrites(self, tmp_path_chdir):
