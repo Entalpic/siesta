@@ -337,7 +337,12 @@ def resolve_selection(
         if unknown:
             logger.abort(f"Unknown {kind}(s): {unknown}. Available: {available}")
         return list(names)
-    if not (interactive or sys.stdin.isatty()):
+    # Interactive selection needs a real terminal, regardless of how it was
+    # requested. An explicit -i with no TTY is a broken invocation worth
+    # surfacing rather than letting questionary hang or crash.
+    if not sys.stdin.isatty():
+        if interactive:
+            logger.abort("Interactive selection requires a terminal (no TTY).")
         logger.abort(
             f"No {kind}s specified. Pass names, --all, or use -i for interactive mode."
         )
