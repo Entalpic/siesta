@@ -303,7 +303,11 @@ def quickstart_project(
         )
 
     if agents:
-        summary = install_quickstart(["cursor", "claude"], "local", force=overwrite)
+        # Back up existing agent files when overwriting so a user-authored
+        # CLAUDE.md/AGENTS.md is recoverable from a .bak.
+        summary = install_quickstart(
+            ["cursor", "claude"], "local", force=overwrite, backup=overwrite
+        )
         print_summary(summary)
         logger.info("Agent assets installed.")
 
