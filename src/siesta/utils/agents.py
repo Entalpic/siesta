@@ -29,6 +29,8 @@ RULES_DIR = ASSETS / "rules"
 CONSTITUTIONS_DIR = ASSETS / "constitutions"
 DEFAULT_CONSTITUTION = "entalpic-default"
 IMPORT_LINE = "@AGENTS.md"
+QUICKSTART_FILE = ASSETS / "quickstart.yaml"
+"""Path to the bundled Quickstart Config (curated default Agent Assets)."""
 
 
 # ---------------------------------------------------------------------------
@@ -709,6 +711,114 @@ def _handle_claude_import(
             f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8"
         )
         summary["written"].append(str(claude_dest) + " (import prepended)")
+
+
+# ---------------------------------------------------------------------------
+# Quickstart Config loader + installer
+# ---------------------------------------------------------------------------
+
+
+def load_quickstart() -> dict:
+    """Load the bundled Quickstart Config from ``agents_assets/quickstart.yaml``.
+
+    Returns a normalized dict with missing or empty categories defaulting to
+    an empty list / ``None`` so callers can treat them as No-Ops.
+
+    Returns
+    -------
+    dict
+        ``{"skills": list[str], "rules": list[str], "constitution": str | None}``
+
+    Examples
+    --------
+    .. code-block:: python
+
+        cfg = load_quickstart()
+        # {"skills": ["grill-with-docs"], "rules": [...], "constitution": "entalpic-default"}
+    """
+    raw = Path(str(QUICKSTART_FILE)).read_text(encoding="utf-8")
+    data = YAML(typ="safe", pure=True).load(raw) or {}
+    return {
+        "skills": list(data.get("skills") or []),
+        "rules": list(data.get("rules") or []),
+        "constitution": data.get("constitution") or None,
+    }
+
+
+def install_quickstart(
+    providers: list[str],
+    scope: str,
+    *,
+    force: bool = False,
+    backup: bool = False,
+    interactive: bool = False,
+) -> dict[str, list[str]]:
+    """Install all Agent Assets declared in the Quickstart Config.
+
+    Reads the bundled ``agents_assets/quickstart.yaml``, validates every
+    listed name against the catalog (fail-fast), then delegates to
+    :func:`install_skill`, :func:`install_rule`, and
+    :func:`install_constitution`.
+
+    Parameters
+    ----------
+    providers : list[str]
+        Target Providers (``"cursor"`` and/or ``"claude"``).
+    scope : str
+        ``"local"`` or ``"global"``.
+    force : bool, optional
+        Overwrite existing targets without prompting.
+    backup : bool, optional
+        Back up existing targets before overwriting.
+    interactive : bool, optional
+        Prompt on conflict.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        ``{"written": [...], "skipped": [...], "backed_up": [...]}``
+    """
+    cfg = load_quickstart()
+
+    # Validation phase: abort before any write if the config references unknown assets.
+    unknown_skills = [s for s in cfg["skills"] if s not in available_skills()]
+    if unknown_skills:
+        logger.abort(
+            f"Quickstart Config references unknown skill(s): {unknown_skills}. "
+            f"Available: {available_skills()}"
+        )
+
+    unknown_rules = [r for r in cfg["rules"] if r not in available_rules()]
+    if unknown_rules:
+        logger.abort(
+            f"Quickstart Config references unknown rule(s): {unknown_rules}. "
+            f"Available: {available_rules()}"
+        )
+
+    if cfg["constitution"] and cfg["constitution"] not in available_constitutions():
+        logger.abort(
+            f"Quickstart Config references unknown constitution: {cfg['constitution']!r}. "
+            f"Available: {available_constitutions()}"
+        )
+
+    # Execution phase: install each category, merging results into one summary.
+    combined: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
+    for name in cfg["skills"]:
+        result = install_skill(name, providers, scope, force=force, backup=backup, interactive=interactive)
+        for key in combined:
+            combined[key].extend(result.get(key, []))
+
+    for name in cfg["rules"]:
+        result = install_rule(name, providers, scope, force=force, backup=backup, interactive=interactive)
+        for key in combined:
+            combined[key].extend(result.get(key, []))
+
+    if cfg["constitution"]:
+        result = install_constitution(cfg["constitution"], providers, scope, force=force, backup=backup, interactive=interactive)
+        for key in combined:
+            combined[key].extend(result.get(key, []))
+
+    return combined
 
 
 # ---------------------------------------------------------------------------

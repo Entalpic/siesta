@@ -13,6 +13,7 @@ from siesta.utils.agents import (
     available_rules,
     available_skills,
     install_constitution,
+    install_quickstart,
     install_rule,
     install_skill,
     print_summary,
@@ -296,5 +297,73 @@ def add_constitution(
         force=force,
         backup=backup,
         interactive=interactive,
+    )
+    print_summary(summary)
+
+
+# ---------------------------------------------------------------------------
+# quickstart
+# ---------------------------------------------------------------------------
+
+
+@agents_app.command(name="quickstart")
+def quickstart(
+    *,
+    cursor: bool = False,
+    claude: bool = False,
+    both: bool = False,
+    local: bool = False,
+    global_: Annotated[bool, Parameter(name=["--global"])] = False,
+    force: bool = False,
+    backup: bool = False,
+    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
+) -> None:
+    """Install the curated default Agent Assets in one step.
+
+    Reads the bundled Quickstart Config and installs the declared Skills,
+    Rules, and Constitution.  Equivalent to running ``add-skill``,
+    ``add-rule``, and ``add-constitution`` for each listed asset.
+
+    Defaults to ``--local`` and both Providers when no flags are given.
+
+    Examples
+    --------
+    .. code-block:: bash
+
+        # Install all curated assets locally for both providers (default)
+        $ siesta agents quickstart
+
+        # Install globally for Claude only
+        $ siesta agents quickstart --global --claude
+
+        # Force-overwrite any existing assets
+        $ siesta agents quickstart --force
+
+    Parameters
+    ----------
+    cursor : bool, optional
+        Target the Cursor provider.
+    claude : bool, optional
+        Target the Claude provider.
+    both : bool, optional
+        Target both providers (default when no provider flag is given).
+    local : bool, optional
+        Install into the current repository (default).
+    global_ : bool, optional
+        Install into the user home (``~/.cursor/skills/``, ``~/.claude/skills/``).
+    force : bool, optional
+        Overwrite existing targets without prompting.
+    backup : bool, optional
+        Back up existing targets before overwriting.
+    interactive : bool, optional
+        Enable interactive prompts for each conflict (``-i``).
+    """
+    # --- Validation phase ---
+    scope = resolve_scope(local, global_)
+    providers = resolve_providers(cursor, claude, both)
+
+    # --- Execution phase ---
+    summary = install_quickstart(
+        providers, scope, force=force, backup=backup, interactive=interactive
     )
     print_summary(summary)

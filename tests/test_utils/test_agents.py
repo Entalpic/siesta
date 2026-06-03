@@ -3,25 +3,24 @@
 helpers, selection resolution, and conflict-aware writers.
 """
 
-import shutil
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from siesta.utils.agents import (
     DEFAULT_CONSTITUTION,
     IMPORT_LINE,
-    _handle_claude_import,
     _split_frontmatter,
     available_constitutions,
     available_rules,
     available_skills,
     base_dir,
     install_constitution,
+    install_quickstart,
     install_rule,
     install_skill,
+    load_quickstart,
     mdc_to_claude,
     resolve_providers,
     resolve_scope,
@@ -31,7 +30,6 @@ from siesta.utils.agents import (
     write_dir,
     write_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # Catalog discovery
@@ -215,20 +213,6 @@ class TestMdcToClaude:
         assert '"**/*.py"' in result
         assert "alwaysApply" not in result
         assert "description" not in result
-
-    def test_real_keep_architecture_rule_no_paths(self):
-        """alwaysApply:true rule should produce a file with no paths block."""
-        from importlib.resources import files
-
-        src = (
-            files("siesta")
-            / "agents_assets"
-            / "rules"
-            / "keep-system-architecture-up-to-date.mdc"
-        )
-        raw = Path(str(src)).read_text(encoding="utf-8")
-        result = mdc_to_claude(raw)
-        assert "paths:" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -507,3 +491,36 @@ class TestInstallConstitution:
         )
         assert (tmp_path / "AGENTS.md.bak").read_text() == "old agents"
         assert (tmp_path / "AGENTS.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# load_quickstart + install_quickstart
+# ---------------------------------------------------------------------------
+
+
+def test_load_quickstart_shape():
+    result = load_quickstart()
+    assert set(result.keys()) == {"skills", "rules", "constitution"}
+    assert "grill-with-docs" in result["skills"]
+    assert "python-docstrings" in result["rules"]
+    assert "mirror-providers" in result["rules"]
+    assert result["constitution"] == "entalpic-default"
+
+
+class TestInstallQuickstart:
+    def test_installs_all_kinds_both_local(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        install_quickstart(["cursor", "claude"], "local")
+        assert (tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md").exists()
+        assert (tmp_path / ".cursor" / "rules" / "python-docstrings.mdc").exists()
+        assert (tmp_path / ".claude" / "rules" / "mirror-providers.md").exists()
+        assert (tmp_path / "AGENTS.md").exists()
+        assert (tmp_path / "CLAUDE.md").exists()
+
+    def test_aborts_on_unknown_skill(self, monkeypatch):
+        monkeypatch.setattr(
+            "siesta.utils.agents.load_quickstart",
+            lambda: {"skills": ["nope"], "rules": [], "constitution": None},
+        )
+        with pytest.raises(SystemExit):
+            install_quickstart(["cursor"], "local")

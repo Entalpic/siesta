@@ -9,6 +9,7 @@ from typing import Annotated
 from cyclopts import App, Parameter
 from gitignore_parser import parse_gitignore
 
+from siesta.utils.agents import install_quickstart, print_summary
 from siesta.utils.common import (
     get_project_name,
     load_deps,
@@ -60,6 +61,7 @@ def quickstart_project(
     tests: bool | None = None,
     actions: bool | None = None,
     gitignore: bool | None = None,
+    agents: bool | None = None,
 ):
     """Start a ``uv``-based Python project from scratch, with initial project structure and docs.
 
@@ -144,6 +146,9 @@ def quickstart_project(
         Whether to initialize GitHub Actions, by default ``None`` (i.e. prompt the user).
     gitignore: bool, optional
         Whether to initialize the ``.gitignore`` file, by default ``None`` (i.e. prompt the user).
+    agents : bool, optional
+        Whether to install recommended agent assets (skills/rules/constitution), by default
+        ``None`` (i.e. prompt the user).
     """
     if as_app and as_pkg:
         logger.abort("Cannot use both --as-app and --as-pkg flags.")
@@ -176,6 +181,8 @@ def quickstart_project(
             actions = CLI_DEFAULTS["actions"]
         if gitignore is None:
             gitignore = CLI_DEFAULTS["gitignore"]
+        if agents is None:
+            agents = CLI_DEFAULTS["agents"]
 
     # Prompt collection phase: gather all unresolved decisions before mutations.
     if deps is None:
@@ -202,6 +209,11 @@ def quickstart_project(
 
     if docs is None:
         docs = logger.confirm("Would you like to initialize the docs?")
+
+    if agents is None:
+        agents = logger.confirm(
+            "Would you like to install recommended agent assets?"
+        )
 
     docs_with_uv: bool | None = None
     if docs and deps:
@@ -291,6 +303,11 @@ def quickstart_project(
             remote_assets=remote_assets,
             project_name=project_name,
         )
+
+    if agents:
+        summary = install_quickstart(["cursor", "claude"], "local", force=overwrite)
+        print_summary(summary)
+        logger.info("Agent assets installed.")
 
     tree_project(".")
     logger.info("Project initialized.")

@@ -244,3 +244,30 @@ class TestAddConstitution:
             "agents", "add-constitution", "--local", "--global"
         )
         assert code != 0
+
+
+# ---------------------------------------------------------------------------
+# quickstart
+# ---------------------------------------------------------------------------
+
+
+class TestQuickstart:
+    def test_quickstart_installs_all_both_local(self, tmp_path_chdir):
+        run("agents", "quickstart", "--both", "--local")
+        assert (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md").exists()
+        assert (tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc").exists()
+        assert (tmp_path_chdir / ".claude" / "rules" / "mirror-providers.md").exists()
+        assert (tmp_path_chdir / "AGENTS.md").exists()
+        assert (tmp_path_chdir / "CLAUDE.md").exists()
+
+    def test_quickstart_cursor_only(self, tmp_path_chdir):
+        run("agents", "quickstart", "--cursor")
+        assert (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md").exists()
+        assert not (tmp_path_chdir / ".claude" / "skills").exists()
+
+    def test_quickstart_force_overwrites(self, tmp_path_chdir):
+        rule = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
+        rule.parent.mkdir(parents=True)
+        rule.write_text("old")
+        run("agents", "quickstart", "--cursor", "--force")
+        assert rule.read_text() != "old"

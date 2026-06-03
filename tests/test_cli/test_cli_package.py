@@ -8,7 +8,13 @@ from pathlib import Path
 from cyclopts import App
 
 from siesta.cli import main
-from siesta.cli.agents_app import agents_app, add_constitution, add_rule, add_skill
+from siesta.cli.agents_app import (
+    add_constitution,
+    add_rule,
+    add_skill,
+    agents_app,
+    quickstart,
+)
 from siesta.cli.docs_app import build_docs, docs_app, init_docs
 from siesta.cli.main_app import app
 from siesta.cli.project_app import project_app, quickstart_project, setup_tests
@@ -87,13 +93,14 @@ def test_tab_completions_app_registers_leaf_commands():
 
 
 def test_agents_app_registers_commands():
-    assert _command_names(agents_app) == {"add-skill", "add-rule", "add-constitution"}
+    assert _command_names(agents_app) == {"add-skill", "add-rule", "add-constitution", "quickstart"}
 
 
 def test_agents_app_exposes_command_callables():
     assert callable(add_skill)
     assert callable(add_rule)
     assert callable(add_constitution)
+    assert callable(quickstart)
 
 
 def test_domain_modules_expose_command_callables():

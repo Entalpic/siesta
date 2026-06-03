@@ -42,9 +42,22 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
-# 4. Scoped Provider Rules
+# 4. Constitution, Rules, and Skills
 
-`AGENTS.md` is the source of truth for global, always-on behavior. Provider-specific rule files should contain only scoped behavior and vendor loading metadata.
+**One artifact owns each piece of guidance. Never duplicate across them.**
+
+Three artifacts carry agent guidance, each owning a distinct slice:
+
+- **Constitution** (this file, `AGENTS.md`): always loaded, applies to every task regardless of which files you touch. Owns global principles only. Keep it thin — when guidance is a procedure, move it into a Skill and point at it from here instead of inlining the steps.
+- **Rule** (`.cursor/rules/*.mdc`, `.claude/rules/*.md`): loaded conditionally by file glob or path. Owns constraints tied to a specific file type, directory, or technology — keep these out of the Constitution.
+- **Skill** (`SKILL.md` directory): invoked on demand when a task matches. Owns multi-step procedures and workflows. The Constitution and Rules reference Skills; they never inline a Skill's steps.
+
+Placement test:
+- Applies to every task → Constitution.
+- Applies only when touching certain files → Rule.
+- A procedure you run for a kind of task → Skill.
+
+The Constitution loads on every task, so keep it thin and grow it only with genuinely universal principles. If it grows, that's a sign guidance was misclassified — demote it to a Rule or Skill. Moving always-on content into a separate imported file does not help: an `@`-imported file fills context identically. The fix is changing *when* guidance loads, not *where* it lives.
 
 # 5. Be safe, be consistent
 

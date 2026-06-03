@@ -32,6 +32,7 @@ CLI_DEFAULTS = {
     "tests": True,
     "actions": True,
     "gitignore": True,
+    "agents": True,
 }
 """Default values for the CLI when not in ``interactive`` mode.
 
@@ -43,4 +44,5 @@ CLI_DEFAULTS = {
 - ``tests``: Whether to initialize (pytest) tests infra, by default ``True``.
 - ``actions``: Whether to initialize GitHub Actions, by default ``True``.
 - ``gitignore``: Whether to initialize the ``.gitignore`` file, by default ``True``.
+- ``agents``: Whether to install recommended agent assets (skills/rules/constitution), by default ``True``.
 """

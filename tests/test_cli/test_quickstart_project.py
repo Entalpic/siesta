@@ -142,7 +142,7 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
 def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
     """Test quickstart collects prompts before any mutating command runs."""
     events: list[str] = []
-    prompts = iter([True, True, True, True, True, True, True])
+    prompts = iter([True, True, True, True, True, True, True, True])
 
     def fake_confirm(message: str) -> bool:
         events.append(f"confirm:{message}")
@@ -180,6 +180,10 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
     monkeypatch.setattr(
         cli, "tree_project", lambda *_args, **_kwargs: events.append("tree")
     )
+    monkeypatch.setattr(
+        cli, "install_quickstart", lambda *a, **k: (events.append("agents"), {})[1]
+    )
+    monkeypatch.setattr(cli, "print_summary", lambda *a, **k: None)
 
     try:
         app(["project", "quickstart", "-i"])
@@ -196,3 +200,28 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
     ]
     assert prompt_indices
     assert max(prompt_indices) < first_mutation
+
+
+def test_quickstart_installs_agents(tmp_path_chdir, capture_output):
+    """Agent assets are written by default during project quickstart."""
+    with capture_output():
+        try:
+            app(["project", "quickstart"])
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert (tmp_path_chdir / "AGENTS.md").exists()
+    assert (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs").is_dir()
+    assert (tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc").exists()
+
+
+def test_quickstart_respects_no_agents(tmp_path_chdir, capture_output):
+    """--no-agents skips the agent assets step."""
+    with capture_output():
+        try:
+            app(["project", "quickstart", "--no-agents"])
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert not (tmp_path_chdir / "AGENTS.md").exists()
+    assert not (tmp_path_chdir / ".cursor" / "skills").exists()
