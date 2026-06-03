@@ -57,9 +57,7 @@ def available_rules() -> list[str]:
     list[str]
         Sorted list of rule names.
     """
-    return sorted(
-        p.name[:-4] for p in RULES_DIR.iterdir() if p.name.endswith(".mdc")
-    )
+    return sorted(p.name[:-4] for p in RULES_DIR.iterdir() if p.name.endswith(".mdc"))
 
 
 def available_constitutions() -> list[str]:
@@ -294,9 +292,7 @@ def resolve_selection(
     if names:
         unknown = [n for n in names if n not in available]
         if unknown:
-            logger.abort(
-                f"Unknown {kind}(s): {unknown}. Available: {available}"
-            )
+            logger.abort(f"Unknown {kind}(s): {unknown}. Available: {available}")
         return list(names)
     if not (interactive or sys.stdin.isatty()):
         logger.abort(
@@ -630,7 +626,7 @@ def install_constitution(
         force=force,
         backup=backup,
         interactive=interactive,
-        label=f"AGENTS.md",
+        label="AGENTS.md",
     )
     _record(summary, action, str(agents_dest))
     if action != "skip":
@@ -707,9 +703,7 @@ def _handle_claude_import(
         )
 
     if do_prepend:
-        claude_dest.write_text(
-            f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8"
-        )
+        claude_dest.write_text(f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8")
         summary["written"].append(str(claude_dest) + " (import prepended)")
 
 
@@ -804,17 +798,28 @@ def install_quickstart(
     # Execution phase: install each category, merging results into one summary.
     combined: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
     for name in cfg["skills"]:
-        result = install_skill(name, providers, scope, force=force, backup=backup, interactive=interactive)
+        result = install_skill(
+            name, providers, scope, force=force, backup=backup, interactive=interactive
+        )
         for key in combined:
             combined[key].extend(result.get(key, []))
 
     for name in cfg["rules"]:
-        result = install_rule(name, providers, scope, force=force, backup=backup, interactive=interactive)
+        result = install_rule(
+            name, providers, scope, force=force, backup=backup, interactive=interactive
+        )
         for key in combined:
             combined[key].extend(result.get(key, []))
 
     if cfg["constitution"]:
-        result = install_constitution(cfg["constitution"], providers, scope, force=force, backup=backup, interactive=interactive)
+        result = install_constitution(
+            cfg["constitution"],
+            providers,
+            scope,
+            force=force,
+            backup=backup,
+            interactive=interactive,
+        )
         for key in combined:
             combined[key].extend(result.get(key, []))
 

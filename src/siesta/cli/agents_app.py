@@ -193,9 +193,7 @@ def add_rule(
     providers = resolve_providers(cursor, claude, both)
 
     available = available_rules()
-    selected = resolve_selection(
-        list(names), all_, available, interactive, kind="rule"
-    )
+    selected = resolve_selection(list(names), all_, available, interactive, kind="rule")
     if not selected:
         logger.info("No rules selected; nothing to do.")
         sys.exit(0)
@@ -285,9 +283,7 @@ def add_constitution(
 
     available = available_constitutions()
     if name not in available:
-        logger.abort(
-            f"Unknown constitution: {name!r}. Available: {available}"
-        )
+        logger.abort(f"Unknown constitution: {name!r}. Available: {available}")
 
     # --- Execution phase ---
     summary = install_constitution(

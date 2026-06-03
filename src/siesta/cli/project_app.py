@@ -211,9 +211,7 @@ def quickstart_project(
         docs = logger.confirm("Would you like to initialize the docs?")
 
     if agents is None:
-        agents = logger.confirm(
-            "Would you like to install recommended agent assets?"
-        )
+        agents = logger.confirm("Would you like to install recommended agent assets?")
 
     docs_with_uv: bool | None = None
     if docs and deps:

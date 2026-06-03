@@ -274,9 +274,7 @@ class Logger(BaseLogger):
         KeyboardInterrupt
             If the prompt is cancelled (for example with Ctrl+C).
         """
-        response = questionary.select(
-            f"{self.prefix}{message}", choices=choices
-        ).ask()
+        response = questionary.select(f"{self.prefix}{message}", choices=choices).ask()
         if response is None:
             raise KeyboardInterrupt()
         return response
