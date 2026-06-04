@@ -17,10 +17,10 @@ Home
 Documentation
 =============
 
-This is your base documentation file. You can edit this file to add more context to your documentation. 
+This is your base documentation file. You can edit this file to add more context to your documentation.
 For example, you can add a brief description of your project, installation instructions, a quickstart guide, and more.
 
-You can also add more pages to your documentation by creating new ``.rst`` files in the ``source`` directory and listing them in the ``toctree`` directive above, 
+You can also add more pages to your documentation by creating new ``.rst`` files in the ``source`` directory and listing them in the ``toctree`` directive above,
 below the ``self`` entry. For example, if you create a new file called ``example.rst``, you can add it to the ``toctree`` directive like this:
 
 .. code-block:: rst

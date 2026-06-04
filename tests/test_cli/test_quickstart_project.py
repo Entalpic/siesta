@@ -139,6 +139,18 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
     assert not Path(tmp_path_chdir, ".github").exists()
 
 
+def test_quickstart_test_scaffold_uses_normalized_import(tmp_path_chdir):
+    """Generated import tests use the Python package name created by uv."""
+    cli.write_tests_infra("Siesta-Quickstart.3qwVCd")
+
+    test_file = tmp_path_chdir / "tests" / "test_import.py"
+    content = test_file.read_text()
+
+    assert content.startswith("# Copyright 2025 Entalpic")
+    assert "from pathlib import Path\n\nimport pytest" in content
+    assert "import siesta_quickstart_3qwvcd  # noqa: F401" in content
+
+
 def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
     """Test quickstart collects prompts before any mutating command runs."""
     events: list[str] = []

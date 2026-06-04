@@ -10,7 +10,8 @@
 project = "$PROJECT_NAME"  # Project name
 copyright = "2024, Entalpic"
 author = "REPLACE in conf.py"  # Contributors to the package
-release = "REPLACE in conf.py"  # Current version of the package, can be retrieved programmatically too.
+# Current version of the package, can be retrieved programmatically too.
+release = "REPLACE in conf.py"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -41,7 +42,8 @@ rst_prolog = """
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_title = "$PROJECT_NAME"  # Title for the HTML output for the docs, typically the project's name
+# Title for the HTML output for the docs, typically the project's name
+html_title = "$PROJECT_NAME"
 html_theme = "shibuya"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
@@ -101,7 +103,8 @@ intersphinx_mapping = {
 # https://autoapi.readthedocs.io/
 autodoc_typehints = "signature"
 autoapi_type = "python"
-autoapi_dirs = []  # list of paths to the packages to document
+# List of paths to the packages to document.
+autoapi_dirs = []
 autoapi_ignore = ["*.venv/*", "*/tests/*", "*/boilerplate/*", "docs/*"]
 autoapi_member_order = "bysource"
 autoapi_template_dir = "_templates/autoapi"
