@@ -200,7 +200,10 @@ def get_project_name(interactive: bool = False, snake_case: bool = False) -> str
     pyproject_name = None
     if pyproject_toml.exists():
         txt = pyproject_toml.read_text()
-        pyproject_name = re.search(r"name\s*=\s*['\"](.*)['\"]", txt).group(1)
+        match = re.search(r"name\s*=\s*['\"](.*)['\"]", txt)
+        # Guard against missing or malformed `name` — fall through to directory name.
+        if match:
+            pyproject_name = match.group(1)
     default = pyproject_name or resolve_path(".").name
     name = logger.prompt("Project name", default=default) if interactive else default
     if snake_case:

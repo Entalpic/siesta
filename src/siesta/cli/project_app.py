@@ -9,6 +9,7 @@ from typing import Annotated
 from cyclopts import App, Parameter
 from gitignore_parser import parse_gitignore
 
+from siesta.utils.agentic import setup_agentic_exploration
 from siesta.utils.agents import install_quickstart, print_summary
 from siesta.utils.common import (
     get_project_name,
@@ -62,6 +63,7 @@ def quickstart_project(
     actions: bool | None = None,
     gitignore: bool | None = None,
     agents: bool | None = None,
+    explo: Annotated[bool | None, Parameter(name=["--explo"])] = None,
 ):
     """Start a ``uv``-based Python project from scratch, with initial project structure and docs.
 
@@ -149,6 +151,13 @@ def quickstart_project(
     agents : bool, optional
         Whether to install recommended agent assets (skills/rules/constitution), by default
         ``None`` (i.e. prompt the user).
+    explo: bool, optional
+        Whether to scaffold the agentic-exploration workflow (``Human.md``,
+        ``AGENT.md``, bundled ``.claude/skills/agentic-exploration/``). When
+        neither ``--explo`` nor ``--no-explo`` is given: prompts in interactive
+        mode and defaults to ``False`` in non-interactive mode. Lifecycle docs
+        (``research_plan.md``, ``plan.md``, ``TODO.md``, ``notes.md``,
+        ``handoff.md``) are intentionally not created at init.
     """
     if as_app and as_pkg:
         logger.abort("Cannot use both --as-app and --as-pkg flags.")
@@ -183,6 +192,8 @@ def quickstart_project(
             gitignore = CLI_DEFAULTS["gitignore"]
         if agents is None:
             agents = CLI_DEFAULTS["agents"]
+        if explo is None:
+            explo = CLI_DEFAULTS["explo"]
 
     # Prompt collection phase: gather all unresolved decisions before mutations.
     if deps is None:
@@ -212,6 +223,14 @@ def quickstart_project(
 
     if agents is None:
         agents = logger.confirm("Would you like to install recommended agent assets?")
+
+    # Agentic exploration is opt-in for non-interactive runs because it writes
+    # several agent-facing files beyond the base Python scaffold.
+    if explo is None:
+        explo = logger.confirm(
+            "Would you like to scaffold the agentic-exploration workflow "
+            "(Human.md, AGENT.md, bundled skill)?"
+        )
 
     docs_with_uv: bool | None = None
     if docs and deps:
@@ -310,6 +329,17 @@ def quickstart_project(
         )
         print_summary(summary)
         logger.info("Agent assets installed.")
+
+    if explo:
+        layout = "app" if as_app else "pkg" if as_pkg else "lib"
+        setup_agentic_exploration(
+            project_path=Path("."),
+            project_name=project_name,
+            tests=bool(tests),
+            docs=bool(docs),
+            overwrite=overwrite,
+            layout=layout,
+        )
 
     tree_project(".")
     logger.info("Project initialized.")
@@ -416,6 +446,74 @@ def setup_tests(
         logger.info("Test actions config written.")
 
     logger.success("Testing infrastructure set up successfully.")
+
+
+# Skills that `siesta project add-skill <name>` can retrofit into an existing
+# project. Kept as a set so adding a new skill is a one-line change.
+SUPPORTED_SKILLS = {"agentic-exploration"}
+
+
+@project_app.command(name="add-skill")
+def add_skill(
+    skill: str,
+    overwrite: bool = False,
+):
+    """Retrofit a siesta-bundled skill into an existing project.
+
+    Today only ``agentic-exploration`` is supported: it materializes
+    ``Human.md``, ``AGENT.md``, and ``.claude/skills/agentic-exploration/`` into
+    the current directory. The presence of ``tests/`` and ``docs/`` is detected
+    from the filesystem so the scaffolded ``AGENT.md`` only documents commands
+    that actually exist in the retrofitted project.
+
+    Lifecycle documents (``research_plan.md``, ``plan.md``, ``TODO.md``,
+    ``notes.md``, ``handoff.md``) are intentionally not created — the agent
+    materializes them from the bundled ``templates/`` only when real work calls
+    for them.
+
+    Example
+    -------
+    .. code-block:: bash
+
+        # Retrofit the agentic-exploration workflow into the current project.
+        $ cd path/to/existing/project
+        $ siesta project add-skill agentic-exploration
+
+        # Overwrite existing Human.md / AGENT.md if they already exist
+        # (otherwise the existing files are backed up).
+        $ siesta project add-skill agentic-exploration --overwrite
+
+    Parameters
+    ----------
+    skill : str
+        The name of the bundled skill to install. Currently only
+        ``agentic-exploration`` is supported.
+    overwrite : bool, optional
+        Whether to overwrite existing files at the destination, by default
+        ``False`` (existing files are backed up via ``.bak``).
+    """
+    if skill not in SUPPORTED_SKILLS:
+        supported = ", ".join(sorted(SUPPORTED_SKILLS))
+        logger.abort(f"Unknown skill '{skill}'. Supported skills: {supported}.", exit=1)
+
+    # Detect the project name from pyproject.toml (or fall back to the
+    # directory name) and detect optional surfaces from the filesystem so the
+    # rendered AGENT.md matches what's actually there.
+    project_name = get_project_name(interactive=False)
+    tests = Path("tests").is_dir()
+    docs = Path("docs").is_dir()
+    # Infer layout: absence of src/ signals an app-mode project.
+    layout = "lib" if Path("src").is_dir() else "app"
+
+    setup_agentic_exploration(
+        project_path=Path("."),
+        project_name=project_name,
+        tests=tests,
+        docs=docs,
+        overwrite=overwrite,
+        layout=layout,
+    )
+    logger.success(f"Skill '{skill}' installed.")
 
 
 @project_app.command(name="tree")

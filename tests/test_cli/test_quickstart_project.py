@@ -10,7 +10,7 @@ def test_quickstart_project(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         try:
-            app(["project", "quickstart"])
+            app(["project", "quickstart", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -36,7 +36,7 @@ def test_quickstart_project_as_app(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         try:
-            app(["project", "quickstart", "--as-app"])
+            app(["project", "quickstart", "--as-app", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -52,7 +52,7 @@ def test_quickstart_project_as_pkg(tmp_path_chdir, capture_output):
 
     with capture_output() as output:
         try:
-            app(["project", "quickstart", "--as-pkg"])
+            app(["project", "quickstart", "--as-pkg", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -67,7 +67,7 @@ def test_quickstart_respects_no_tests(tmp_path_chdir, capture_output):
     with capture_output() as output:
         # User specifies --no-tests, defaults should not override it
         try:
-            app(["project", "quickstart", "--no-tests"])
+            app(["project", "quickstart", "--no-tests", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -95,7 +95,7 @@ def test_quickstart_respects_no_actions(tmp_path_chdir, capture_output):
     with capture_output() as output:
         # User specifies --no-actions, defaults should not override it
         try:
-            app(["project", "quickstart", "--no-actions"])
+            app(["project", "quickstart", "--no-actions", "--no-explo"])
         except SystemExit as e:
             assert e.code == 0
 
@@ -107,6 +107,107 @@ def test_quickstart_respects_no_actions(tmp_path_chdir, capture_output):
 
     # Check GitHub Actions does NOT exist (user specified --no-actions)
     assert not Path(tmp_path_chdir, ".github").exists()
+
+
+def test_quickstart_with_no_explo_creates_no_agentic_files(
+    tmp_path_chdir, capture_output
+):
+    """Explicit --no-explo must not create agentic surfaces."""
+
+    with capture_output():
+        try:
+            app(["project", "quickstart", "--no-explo"])
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert not Path(tmp_path_chdir, "Human.md").exists()
+    assert not Path(tmp_path_chdir, "AGENT.md").exists()
+    assert not Path(
+        tmp_path_chdir, ".claude", "skills", "agentic-exploration"
+    ).exists()
+
+
+def test_quickstart_default_explo_in_non_interactive_skips_agentic_files(
+    tmp_path_chdir, capture_output
+):
+    """No --explo / --no-explo in non-interactive mode defaults to explo=False."""
+
+    with capture_output():
+        try:
+            app(
+                [
+                    "project",
+                    "quickstart",
+                    "--no-docs",
+                    "--no-tests",
+                    "--no-actions",
+                    "--no-precommit",
+                    "--no-deps",
+                    "--no-ipdb",
+                    "--no-gitignore",
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert not Path(tmp_path_chdir, "Human.md").exists()
+    assert not Path(tmp_path_chdir, "AGENT.md").exists()
+    assert not Path(
+        tmp_path_chdir, ".claude", "skills", "agentic-exploration"
+    ).exists()
+
+
+def test_quickstart_explo_creates_agentic_surface(tmp_path_chdir, capture_output):
+    """`--explo` materializes Human.md, AGENT.md, and the bundled skill — no lifecycle files."""
+
+    with capture_output() as output:
+        try:
+            app(
+                [
+                    "project",
+                    "quickstart",
+                    "--explo",
+                    "--no-docs",
+                    "--no-tests",
+                    "--no-actions",
+                    "--no-precommit",
+                    "--no-deps",
+                    "--no-ipdb",
+                    "--no-gitignore",
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert "Failed to build the docs" not in output.getvalue()
+
+    # Init-time surface.
+    assert Path(tmp_path_chdir, "Human.md").exists()
+    assert Path(tmp_path_chdir, "AGENT.md").exists()
+    skill_dir = Path(tmp_path_chdir, ".claude", "skills", "agentic-exploration")
+    assert (skill_dir / "SKILL.md").exists()
+    assert (skill_dir / "doc-hierarchy.md").exists()
+    assert (skill_dir / "references" / "human.md").exists()
+    assert (skill_dir / "references" / "agent.md").exists()
+    assert (skill_dir / "templates").is_dir()
+
+    # No lifecycle files at init.
+    for lifecycle in (
+        "research_plan.md",
+        "plan.md",
+        "TODO.md",
+        "notes.md",
+        "handoff.md",
+    ):
+        assert not Path(tmp_path_chdir, lifecycle).exists(), (
+            f"lifecycle file {lifecycle} must not be created at init"
+        )
+
+    # Project name substituted in AGENT.md.
+    agent_text = Path(tmp_path_chdir, "AGENT.md").read_text()
+    assert f"# {tmp_path_chdir.name}" in agent_text
+    # Researcher-owned placeholders preserved.
+    assert "🙋" in agent_text
 
 
 def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_output):
@@ -121,6 +222,7 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
                     "quickstart",
                     "--no-tests",
                     "--no-actions",
+                    "--no-explo",
                 ]
             )
         except SystemExit as e:
@@ -142,7 +244,7 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
 def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
     """Test quickstart collects prompts before any mutating command runs."""
     events: list[str] = []
-    prompts = iter([True, True, True, True, True, True, True, True])
+    prompts = iter([True, True, True, True, True, True, True, True, True])
 
     def fake_confirm(message: str) -> bool:
         events.append(f"confirm:{message}")
@@ -184,6 +286,9 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
         cli, "install_quickstart", lambda *a, **k: (events.append("agents"), {})[1]
     )
     monkeypatch.setattr(cli, "print_summary", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cli, "setup_agentic_exploration", lambda **_kwargs: events.append("explo")
+    )
 
     try:
         app(["project", "quickstart", "-i"])

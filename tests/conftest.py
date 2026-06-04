@@ -87,7 +87,7 @@ def module_test_path(tmp_path_factory):
     try:
         os.chdir(tmp_path)  # Change to temp directory
         try:
-            app(["project", "quickstart", "--overwrite"])
+            app(["project", "quickstart", "--overwrite", "--no-explo"])
         except SystemExit as e:
             if e.code != 0:
                 raise

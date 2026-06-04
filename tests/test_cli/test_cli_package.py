@@ -5,8 +5,10 @@ import importlib
 import tomllib
 from pathlib import Path
 
+import pytest
 from cyclopts import App
 
+import siesta.cli.main_app as main_app
 from siesta.cli import main
 from siesta.cli.agents_app import (
     add_constitution,
@@ -39,6 +41,29 @@ def test_entrypoint_main_is_callable():
     assert callable(main)
 
 
+def test_entrypoint_main_translates_cancellation_to_exit_130(
+    monkeypatch, capture_output
+):
+    """The console-script wrapper owns Cancellation exit semantics."""
+    monkeypatch.setattr(main_app, "_set_completion_hint", lambda: None)
+    monkeypatch.setattr(main_app.metadata, "version", lambda _package: "0.0.0")
+    monkeypatch.setattr(
+        main_app, "start_background_update_check", lambda _version: object()
+    )
+    monkeypatch.setattr(
+        main_app,
+        "app",
+        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    with capture_output() as output:
+        with pytest.raises(SystemExit) as exc_info:
+            main_app.main()
+
+    assert exc_info.value.code == 130
+    assert "Aborted." in output.getvalue()
+
+
 def _subapp_names(root_app: App) -> set[str]:
     names: set[str] = set()
     for subapp in root_app.subapps:
@@ -64,7 +89,12 @@ def test_docs_app_registers_leaf_commands():
 
 
 def test_project_app_registers_leaf_commands():
-    assert _command_names(project_app) == {"quickstart", "setup-tests", "tree"}
+    assert _command_names(project_app) == {
+        "quickstart",
+        "setup-tests",
+        "add-skill",
+        "tree",
+    }
 
 
 def test_self_app_registers_leaf_commands():
