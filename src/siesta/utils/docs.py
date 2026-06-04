@@ -3,6 +3,7 @@
 
 import json
 import re
+from collections.abc import Callable
 from filecmp import cmp as compare_files
 from os.path import relpath
 from pathlib import Path
@@ -67,7 +68,7 @@ def _copy_not_overwrite(src: str | Path, dest: str | Path):
         The path to copy the target file to.
     """
     if Path(dest).exists() and not compare_files(src, dest, shallow=False):
-        backed_up = backup(dest)
+        backed_up = backup(Path(dest))
         logger.warning(f"Backing up {dest} to {backed_up}")
     copy2(src, dest)
 
@@ -316,11 +317,10 @@ def get_repo_url(interactive: bool = False) -> str:
     """
     url = ""
     try:
-        ssh_url = (
-            run_command(["git", "config", "--get", "remote.origin.url"])
-            .stdout.strip()
-            .replace("https://github.com/", "")
-        )
+        remote_result = run_command(["git", "config", "--get", "remote.origin.url"])
+        if remote_result is False:
+            raise RuntimeError("No git remote found.")
+        ssh_url = remote_result.stdout.strip().replace("https://github.com/", "")
         html_url = "https://github.com/" + ssh_url.split(":")[-1].replace(".git", "")
         url = (
             logger.prompt("Repository URL", default=html_url)
@@ -334,7 +334,7 @@ def get_repo_url(interactive: bool = False) -> str:
 
 
 def overwrite_docs_files(
-    dest: Path, interactive: bool = False, project_name: str = None
+    dest: Path, interactive: bool = False, project_name: str | None = None
 ):
     """Overwrite the conf.py file with the project name.
 
@@ -360,9 +360,11 @@ def overwrite_docs_files(
     conf_py = dest / "source/conf.py"
     assert conf_py.exists(), f"conf.py not found: {dest}"
     conf_text = conf_py.read_text()
-    conf_text = conf_text.replace("$PROJECT_NAME", project)
+    conf_text = conf_text.replace('"$PROJECT_NAME"', json.dumps(project))
     conf_text = conf_text.replace("autoapi_dirs = []", f"autoapi_dirs = {packages}")
-    conf_text = conf_text.replace("$PROJECT_URL", url or " URL TO BE SET ")
+    conf_text = conf_text.replace(
+        '"$PROJECT_URL"', json.dumps(url or " URL TO BE SET ")
+    )
     conf_py.write_text(conf_text)
 
     # setup autoapi index.rst based on project name and repo URL
@@ -403,13 +405,15 @@ class AutoBuildDocs(RegexMatchingEventHandler):
     ----------
     regexes : list[str]
         The regexes to match against the file paths.
-    build_command : list[str]
+    build_command : Callable[[str], None]
         The command to run to build the docs.
     path : str
         The path to the docs folder.
     """
 
-    def __init__(self, regexes: list[str], build_command: list[str], path: str):
+    def __init__(
+        self, regexes: list[str], build_command: Callable[[str], None], path: str
+    ):
         super().__init__(regexes=regexes)
         self.build_command = build_command
         self.path = path
@@ -424,7 +428,7 @@ class AutoBuildDocs(RegexMatchingEventHandler):
         event : FileSystemEvent
             The event to handle.
         """
-        path = event.src_path
+        path = str(event.src_path)
         suffix = Path(path).suffix
         is_autoapi_rst = "/source/" in path and "/autoapi/" in path and suffix == ".rst"
         is_docs_py = str(self.path) in path and suffix == ".py"

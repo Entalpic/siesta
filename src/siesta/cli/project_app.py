@@ -43,6 +43,24 @@ project_app = App(
 """:py:class:`cyclopts.App`: The app for the ``siesta project`` sub-command."""
 
 
+def _confirm_quickstart_decision(message: str, default_key: str) -> bool:
+    """Prompt for a quickstart decision using the non-interactive CLI default.
+
+    Parameters
+    ----------
+    message : str
+        The decision prompt shown to the user.
+    default_key : str
+        The key in :data:`siesta.utils.config.CLI_DEFAULTS` that owns the recommendation.
+
+    Returns
+    -------
+    bool
+        Whether the user confirmed the decision.
+    """
+    return logger.confirm(message, default=CLI_DEFAULTS[default_key])
+
+
 @project_app.command(name="quickstart")
 def quickstart_project(
     as_app: bool = False,
@@ -185,33 +203,66 @@ def quickstart_project(
             agents = CLI_DEFAULTS["agents"]
 
     # Prompt collection phase: gather all unresolved decisions before mutations.
+    if interactive and not as_app and not as_pkg:
+        layout = logger.select(
+            "How should the project be initialized?",
+            [
+                "Library with src/ layout (recommended)",
+                "Application script",
+                "Package without src/ layout",
+            ],
+        )
+        as_app = layout == "Application script"
+        as_pkg = layout == "Package without src/ layout"
+
     if deps is None:
-        deps = logger.confirm("Would you like to install recommended dependencies?")
+        deps = _confirm_quickstart_decision(
+            "Would you like to install recommended dependencies?", "deps"
+        )
 
     if precommit is None:
-        precommit = logger.confirm(
-            "Would you like to update & install pre-commit hooks?"
+        precommit = _confirm_quickstart_decision(
+            "Would you like to update & install pre-commit hooks?", "precommit"
         )
 
     if ipdb is None:
-        ipdb = logger.confirm("Would you like to add ipdb as debugger?")
+        ipdb = _confirm_quickstart_decision(
+            "Would you like to add ipdb as debugger?", "ipdb"
+        )
 
     if tests is None:
-        tests = logger.confirm("Would you like to initialize (pytest) tests infra?")
+        tests = _confirm_quickstart_decision(
+            "Would you like to initialize (pytest) tests infra?", "tests"
+        )
 
     if actions is None:
-        actions = logger.confirm("Would you like to initialize GitHub Actions?")
+        actions = _confirm_quickstart_decision(
+            "Would you like to initialize GitHub Actions?", "actions"
+        )
 
     if gitignore is None:
-        gitignore = logger.confirm(
-            "Would you like to initialize the ``.gitignore`` file?"
+        gitignore = _confirm_quickstart_decision(
+            "Would you like to initialize the ``.gitignore`` file?", "gitignore"
         )
 
     if docs is None:
-        docs = logger.confirm("Would you like to initialize the docs?")
+        docs = _confirm_quickstart_decision(
+            "Would you like to initialize the docs?", "docs"
+        )
+
+    if docs and interactive and docs_path == "./docs":
+        docs_path = logger.prompt("Documentation path", default=docs_path)
 
     if agents is None:
-        agents = logger.confirm("Would you like to install recommended agent assets?")
+        agents = _confirm_quickstart_decision(
+            "Would you like to install recommended agent assets?", "agents"
+        )
+
+    if docs and deps and as_main_deps is None:
+        as_main_deps = _confirm_quickstart_decision(
+            "Would you like to install documentation dependencies as main dependencies?",
+            "as_main_deps",
+        )
 
     docs_with_uv: bool | None = None
     if docs and deps:
@@ -291,7 +342,7 @@ def quickstart_project(
 
         init_docs(
             path=docs_path,
-            as_main_deps=as_main_deps,
+            as_main_deps=bool(as_main_deps),
             overwrite=overwrite,
             deps=deps,
             uv=docs_with_uv,
@@ -432,10 +483,10 @@ def tree_project(path: str = ".", ignore_from_gitignore: bool = True):
         Whether to ignore files from the ``.gitignore`` file in ``path``.
         Only useful if ``path`` is a git repository.
     """
-    path = resolve_path(path)
-    if not path.exists():
-        logger.abort(f"Path not found: {path}", exit=1)
-    gitignore_path = path / ".gitignore"
+    resolved_path = resolve_path(path)
+    if not resolved_path.exists():
+        logger.abort(f"Path not found: {resolved_path}", exit=1)
+    gitignore_path = resolved_path / ".gitignore"
     if ignore_from_gitignore and gitignore_path.exists():
         ignore = parse_gitignore(gitignore_path)
     else:
@@ -444,7 +495,7 @@ def tree_project(path: str = ".", ignore_from_gitignore: bool = True):
     logger.info(
         ".\n"
         + make_labeled_tree(
-            path,
+            resolved_path,
             ignore,
             max_line_length=term_cols - 4,  # account for panel borders
         ),

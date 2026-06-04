@@ -6,7 +6,8 @@ import re
 from os.path import expandvars
 from pathlib import Path
 from shutil import copy2
-from subprocess import CalledProcessError, run
+from subprocess import CalledProcessError, CompletedProcess, run
+from typing import Literal
 
 from ruamel.yaml import YAML
 
@@ -57,7 +58,7 @@ def safe_load(file):
 
 def run_command(
     cmd: list[str], check: bool = True, cwd: str | Path | None = None
-) -> str | bool:
+) -> CompletedProcess[str] | Literal[False]:
     """Run a command in the shell.
 
     Parameters
@@ -71,7 +72,7 @@ def run_command(
 
     Returns
     -------
-    str | bool
+    CompletedProcess[str] | Literal[False]
         The result of the command.
     """
     try:
@@ -104,13 +105,13 @@ def resolve_path(path: str | Path) -> Path:
     return Path(expandvars(path)).expanduser().resolve()
 
 
-def load_deps() -> list[str]:
+def load_deps() -> dict[str, list[str]]:
     """Load dependencies from the |dependenciesjson|_ file.
 
     Returns
     -------
-    list[str]
-        The dependencies to load.
+    dict[str, list[str]]
+        The dependencies to load, keyed by dependency group.
 
     .. |dependenciesjson| replace:: ``dependencies.json``
     .. _dependenciesjson: ../../../dependencies.json
@@ -158,7 +159,7 @@ def write_or_update_pre_commit_file() -> None:
     logger.info("Pre-commit file written.")
 
 
-def get_pyver():
+def get_pyver() -> str:
     """Get the Python version from the user.
 
     Returns
@@ -171,7 +172,10 @@ def get_pyver():
         return python_version_file.read_text().strip()
     if run_command(["which", "uv"]):
         # e.g. "Python 3.12.1"
-        full_version = run_command(["uv", "run", "python", "--version"]).stdout.strip()
+        version_result = run_command(["uv", "run", "python", "--version"])
+        if version_result is False:
+            return "3.12"
+        full_version = version_result.stdout.strip()
         version = full_version.split()[1]
         major, minor, _ = version.split(".")
         return f"{major}.{minor}"
@@ -200,7 +204,9 @@ def get_project_name(interactive: bool = False, snake_case: bool = False) -> str
     pyproject_name = None
     if pyproject_toml.exists():
         txt = pyproject_toml.read_text()
-        pyproject_name = re.search(r"name\s*=\s*['\"](.*)['\"]", txt).group(1)
+        match = re.search(r"name\s*=\s*['\"](.*)['\"]", txt)
+        if match:
+            pyproject_name = match.group(1)
     default = pyproject_name or resolve_path(".").name
     name = logger.prompt("Project name", default=default) if interactive else default
     if snake_case:

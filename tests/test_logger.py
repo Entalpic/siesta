@@ -89,6 +89,23 @@ def test_confirm_defaults_to_true(logger, monkeypatch):
     assert asked["default"] is True
 
 
+def test_confirm_accepts_false_default(logger, monkeypatch):
+    asked = {}
+
+    class Confirm:
+        def ask(self):
+            return False
+
+    def fake_confirm(message, default):
+        asked["message"] = message
+        asked["default"] = default
+        return Confirm()
+
+    monkeypatch.setattr("siesta.logger.questionary.confirm", fake_confirm)
+    assert logger.confirm("Continue?", default=False) is False
+    assert asked["default"] is False
+
+
 def test_confirm_cancellation_raises_keyboard_interrupt(logger, monkeypatch):
     class Confirm:
         def ask(self):

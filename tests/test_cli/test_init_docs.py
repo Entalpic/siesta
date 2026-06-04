@@ -1,4 +1,6 @@
 # Copyright 2025 Entalpic
+import runpy
+
 import pytest
 
 import siesta.cli.docs_app as cli
@@ -117,6 +119,28 @@ def test_init_docs_project_name(
     assert "test_init_docs_project_name0" in index_content
 
 
+def test_init_docs_escapes_project_name_in_conf_py(
+    temp_project_with_git_and_remote, monkeypatch, capture_output
+):
+    """Generated Sphinx config treats project names as string data."""
+    monkeypatch.chdir(temp_project_with_git_and_remote)
+    project_name = '"; import os; #'
+
+    with capture_output() as output:
+        try:
+            app(["docs", "init", "--project-name", project_name])
+        except SystemExit as e:
+            assert e.code == 0
+    assert "Failed to build the docs" not in output.getvalue()
+
+    conf_py = temp_project_with_git_and_remote / "docs" / "source" / "conf.py"
+    conf_globals = runpy.run_path(str(conf_py))
+
+    assert conf_globals["project"] == project_name
+    assert conf_globals["html_title"] == project_name
+    assert conf_globals["html_theme_options"]["nav_links"][0]["title"] == project_name
+
+
 def test_init_docs_no_python_files(tmp_path, monkeypatch, capture_output):
     """Test that docs init fails when no Python files are found."""
     # Change to temp project directory
@@ -216,24 +240,20 @@ def test_init_docs_cancel_during_prompt_has_no_mutation(
     """Test cancellation during prompt collection leaves project untouched."""
     monkeypatch.chdir(temp_project_with_git_and_remote)
 
+    def fail_mkdir(*_args, **_kwargs):
+        raise AssertionError("mkdir should not be called on cancellation")
+
+    def fail_install_dependencies(*_args, **_kwargs):
+        raise AssertionError(
+            "install_dependencies should not be called on cancellation"
+        )
+
     monkeypatch.setattr(
         "siesta.cli.docs_app.logger.confirm",
         lambda _message: (_ for _ in ()).throw(KeyboardInterrupt()),
     )
-    monkeypatch.setattr(
-        cli.Path,
-        "mkdir",
-        lambda *_args, **_kwargs: pytest.fail(
-            "mkdir should not be called on cancellation"
-        ),
-    )
-    monkeypatch.setattr(
-        cli,
-        "install_dependencies",
-        lambda *_args, **_kwargs: pytest.fail(
-            "install_dependencies should not be called on cancellation"
-        ),
-    )
+    monkeypatch.setattr(cli.Path, "mkdir", fail_mkdir)
+    monkeypatch.setattr(cli, "install_dependencies", fail_install_dependencies)
 
     with pytest.raises(SystemExit) as exc_info:
         app(["docs", "init", "-i"])

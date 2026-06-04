@@ -139,12 +139,24 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
     assert not Path(tmp_path_chdir, ".github").exists()
 
 
+def test_quickstart_test_scaffold_uses_normalized_import(tmp_path_chdir):
+    """Generated import tests use the Python package name created by uv."""
+    cli.write_tests_infra("Siesta-Quickstart.3qwVCd")
+
+    test_file = tmp_path_chdir / "tests" / "test_import.py"
+    content = test_file.read_text()
+
+    assert content.startswith("# Copyright ") and "Entalpic" in content.splitlines()[0]
+    assert "import importlib\nfrom pathlib import Path" in content
+    assert "importlib.import_module('siesta_quickstart_3qwvcd')" in content
+
+
 def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
     """Test quickstart collects prompts before any mutating command runs."""
     events: list[str] = []
-    prompts = iter([True, True, True, True, True, True, True, True])
+    prompts = iter([True, True, True, True, True, True, True, True, False])
 
-    def fake_confirm(message: str) -> bool:
+    def fake_confirm(message: str, default: bool = True) -> bool:
         events.append(f"confirm:{message}")
         return next(prompts)
 
@@ -162,6 +174,16 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
         return Result()
 
     monkeypatch.setattr("siesta.cli.project_app.logger.confirm", fake_confirm)
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.select",
+        lambda *_args, **_kwargs: (
+            events.append("select:layout") or "Library with src/ layout (recommended)"
+        ),
+    )
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.prompt",
+        lambda message, default=None: events.append(f"prompt:{message}") or default,
+    )
     monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
     monkeypatch.setattr(cli, "run_command", fake_run_command)
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
@@ -193,13 +215,202 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
     first_mutation = next(
         i
         for i, event in enumerate(events)
-        if event != "check_uv" and not event.startswith("confirm:")
+        if event != "check_uv"
+        and not event.startswith(("confirm:", "select:", "prompt:"))
     )
     prompt_indices = [
-        i for i, event in enumerate(events) if event.startswith("confirm:")
+        i
+        for i, event in enumerate(events)
+        if event.startswith(("confirm:", "select:", "prompt:"))
     ]
     assert prompt_indices
     assert max(prompt_indices) < first_mutation
+
+
+def test_quickstart_interactive_recommends_cli_defaults(tmp_path_chdir, monkeypatch):
+    """Interactive quickstart prompts use CLI defaults as recommendations."""
+    defaults: dict[str, bool] = {}
+
+    def fake_confirm(message: str, default: bool = True) -> bool:
+        defaults[message] = default
+        return default
+
+    monkeypatch.setattr("siesta.cli.project_app.logger.confirm", fake_confirm)
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.select",
+        lambda *_args, **_kwargs: "Library with src/ layout (recommended)",
+    )
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.prompt",
+        lambda _message, default=None: default,
+    )
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
+    monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    try:
+        app(["project", "quickstart", "-i", "--no-docs", "--no-agents"])
+    except SystemExit as e:
+        assert e.code == 0
+
+    assert defaults["Would you like to install recommended dependencies?"] is True
+    assert defaults["Would you like to add ipdb as debugger?"] is True
+
+
+def test_quickstart_interactive_recommends_dev_docs_deps(tmp_path_chdir, monkeypatch):
+    """Docs dependency placement prompt recommends the non-interactive default."""
+    defaults: dict[str, bool] = {}
+
+    def fake_confirm(message: str, default: bool = True) -> bool:
+        defaults[message] = default
+        return default
+
+    monkeypatch.setattr("siesta.cli.project_app.logger.confirm", fake_confirm)
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.select",
+        lambda *_args, **_kwargs: "Library with src/ layout (recommended)",
+    )
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.prompt",
+        lambda _message, default=None: default,
+    )
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
+    monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(
+        "siesta.cli.docs_app.init_docs",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    try:
+        app(["project", "quickstart", "-i", "--no-agents"])
+    except SystemExit as e:
+        assert e.code == 0
+
+    message = (
+        "Would you like to install documentation dependencies as main dependencies?"
+    )
+    assert defaults[message] is False
+
+
+def test_quickstart_interactive_respects_explicit_layout(tmp_path_chdir, monkeypatch):
+    """Explicit layout flags skip the interactive layout prompt."""
+    selected = False
+    commands: list[list[str]] = []
+
+    def fake_select(*_args, **_kwargs):
+        nonlocal selected
+        selected = True
+        return "Library with src/ layout (recommended)"
+
+    def fake_run_command(cmd, check=True, cwd=None):
+        commands.append(cmd)
+        return True
+
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.confirm", lambda *_a, **_k: False
+    )
+    monkeypatch.setattr("siesta.cli.project_app.logger.select", fake_select)
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.prompt",
+        lambda _message, default=None: default,
+    )
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", fake_run_command)
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    try:
+        app(["project", "quickstart", "-i", "--as-app"])
+    except SystemExit as e:
+        assert e.code == 0
+
+    assert selected is False
+    assert ["uv", "init", "--name=test_siesta"] in commands
+
+
+def test_quickstart_interactive_respects_explicit_docs_path(
+    tmp_path_chdir, monkeypatch
+):
+    """Explicit docs path skips the interactive docs path prompt."""
+    prompted = False
+    init_docs_kwargs = {}
+
+    def fake_prompt(_message, default=None):
+        nonlocal prompted
+        prompted = True
+        return default
+
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.confirm", lambda *_a, **_k: False
+    )
+    monkeypatch.setattr(
+        "siesta.cli.project_app.logger.select",
+        lambda *_args, **_kwargs: "Library with src/ layout (recommended)",
+    )
+    monkeypatch.setattr("siesta.cli.project_app.logger.prompt", fake_prompt)
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        "siesta.cli.docs_app.init_docs",
+        lambda **kwargs: init_docs_kwargs.update(kwargs),
+    )
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    try:
+        app(
+            [
+                "project",
+                "quickstart",
+                "-i",
+                "--docs",
+                "--docs-path=custom-docs",
+                "--no-deps",
+                "--no-agents",
+            ]
+        )
+    except SystemExit as e:
+        assert e.code == 0
+
+    assert prompted is False
+    assert init_docs_kwargs["path"] == "custom-docs"
+
+
+def test_quickstart_fresh_project_delegates_docs_uv_detection(
+    tmp_path_chdir, monkeypatch
+):
+    """Fresh quickstart lets docs init detect the uv lockfile after uv init."""
+    init_docs_kwargs = {}
+
+    monkeypatch.setattr("siesta.cli.project_app.logger.confirm", lambda *_a, **_k: True)
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
+    monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(
+        "siesta.cli.docs_app.init_docs",
+        lambda **kwargs: init_docs_kwargs.update(kwargs),
+    )
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    try:
+        app(["project", "quickstart", "--no-agents"])
+    except SystemExit as e:
+        assert e.code == 0
+
+    assert init_docs_kwargs["uv"] is None
 
 
 def test_quickstart_installs_agents(tmp_path_chdir, capture_output):

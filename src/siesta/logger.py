@@ -173,7 +173,7 @@ class Logger(BaseLogger):
             return rf"[grey50 bold]\[{prefix}][/grey50 bold] "
         return prefix
 
-    def prompt(self, message: str, default: str = None) -> str:
+    def prompt(self, message: str, default: str | None = None) -> str:
         """Prompt the user for a value.
 
         Parameters
@@ -199,15 +199,17 @@ class Logger(BaseLogger):
         ).ask()
         if response is None:
             raise KeyboardInterrupt()
-        return response.strip() or default
+        return response.strip() or default or ""
 
-    def confirm(self, message: str) -> bool:
+    def confirm(self, message: str, default: bool = True) -> bool:
         """Confirm a message with the user.
 
         Parameters
         ----------
         message : str
             The message to confirm.
+        default : bool, optional
+            The default answer selected by the prompt, by default ``True``.
 
         Returns
         -------
@@ -221,7 +223,7 @@ class Logger(BaseLogger):
         """
         response = questionary.confirm(
             f"{self.prefix}{message}",
-            default=True,
+            default=default,
         ).ask()
         if response is None:
             raise KeyboardInterrupt()
@@ -414,7 +416,9 @@ class Logger(BaseLogger):
         """
         return self.console.status(message)
 
-    def print(self, *args, title: str = None, as_panel: bool = False, **kwargs) -> None:
+    def print(
+        self, *args, title: str | None = None, as_panel: bool = False, **kwargs
+    ) -> None:
         """Print a message.
 
         Parameters

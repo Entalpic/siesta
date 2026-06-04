@@ -45,7 +45,7 @@ def test_setup_tests_creates_tests_directory(existing_uv_project, capture_output
 
     # Check test file content
     test_content = (existing_uv_project / "tests" / "test_import.py").read_text()
-    assert "import existing_project" in test_content
+    assert "importlib.import_module('existing_project')" in test_content
     assert "def test_import" in test_content
 
 
