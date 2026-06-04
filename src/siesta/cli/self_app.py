@@ -11,14 +11,15 @@ from rich import print as rprint
 
 from siesta.cli._shared import resolve_shell
 from siesta.completions import Shell
+from siesta.utils import github
 from siesta.utils.common import load_deps, logger
 from siesta.utils.github import (
     get_latest_commit_info,
     get_latest_github_release_version,
 )
-from siesta.utils import github
 from siesta.utils.self import (
     compare_versions,
+    get_installation_metadata,
     get_installation_method,
     get_latest_version,
     get_update_command,
@@ -327,12 +328,23 @@ def show_deps(as_pip: bool = False):
 def self_version():
     """Show the current siesta version and check for updates.
 
-    Displays the installed pip version, latest GitHub release,
+    Displays local installation metadata, latest GitHub release,
     and latest commit on main.
     """
     from siesta import __version__
 
-    logger.info(f"Installed (pip): [r]{__version__}[/r]")
+    metadata = get_installation_metadata()
+
+    logger.info(f"Installed version: [r]{__version__}[/r]")
+    logger.info(f"Install method:    [r]{metadata['method']}[/r]")
+    logger.info(f"Install source:    [r]{metadata['source']}[/r]")
+    logger.info(f"Executable path:   [r]{metadata['executable_path']}[/r]")
+    logger.info(f"Package path:      [r]{metadata['package_path']}[/r]")
+    logger.info(f"Python version:    [r]{metadata['python_version']}[/r]")
+    if metadata["update_command"] is not None:
+        logger.info(f"Update command:    [r]{' '.join(metadata['update_command'])}[/r]")
+    elif metadata["update_command_error"] is not None:
+        logger.warning(f"Update command:    {metadata['update_command_error']}")
 
     with logger.loading("Fetching latest versions from GitHub..."):
         release_version, release_err = get_latest_github_release_version()

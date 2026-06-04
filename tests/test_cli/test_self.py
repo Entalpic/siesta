@@ -11,6 +11,7 @@ from siesta.utils.github import format_github_access_error
 from siesta.utils.self import (
     PACKAGE_NAME,
     compare_versions,
+    get_installation_metadata,
     get_installation_method,
     get_installation_source,
     get_latest_version,
@@ -115,6 +116,32 @@ class TestGetInstallationSource:
 
         with patch("siesta.utils.self.metadata.distribution", return_value=mock_dist):
             assert get_installation_source() == "pypi"
+
+
+class TestGetInstallationMetadata:
+    """Tests for get_installation_metadata()."""
+
+    def test_collects_local_installation_metadata(self):
+        """Test that local installation diagnostics include paths and update command."""
+        with (
+            patch(
+                "siesta.utils.self.sys.executable",
+                "/home/user/.local/share/uv/tools/siesta/bin/python",
+            ),
+            patch("siesta.utils.self.get_installation_source", return_value="github"),
+            patch("siesta.__file__", "/tmp/site-packages/siesta/__init__.py"),
+        ):
+            metadata = get_installation_metadata()
+
+        assert metadata["method"] == "uv"
+        assert metadata["source"] == "github"
+        assert metadata["executable_path"].endswith(
+            "/home/user/.local/share/uv/tools/siesta/bin/python"
+        )
+        assert metadata["package_path"].endswith("/tmp/site-packages/siesta")
+        assert metadata["python_version"]
+        assert metadata["update_command"] == ["uv", "tool", "upgrade", PACKAGE_NAME]
+        assert metadata["update_command_error"] is None
 
 
 class TestGetLatestVersion:
@@ -385,6 +412,18 @@ class TestSelfVersionCommand:
         """Test that version command shows pip, release, and commit info."""
         with (
             patch(
+                "siesta.cli.self_app.get_installation_metadata",
+                return_value={
+                    "method": "uv",
+                    "source": "github",
+                    "executable_path": "/opt/uv/tools/siesta/bin/python",
+                    "package_path": "/opt/uv/tools/siesta/lib/python/site-packages/siesta",
+                    "python_version": "3.11.9",
+                    "update_command": ["uv", "tool", "upgrade", "siesta"],
+                    "update_command_error": None,
+                },
+            ),
+            patch(
                 "siesta.cli.self_app.get_latest_github_release_version",
                 return_value=(__version__, None),
             ),
@@ -401,12 +440,37 @@ class TestSelfVersionCommand:
 
         output_str = output.getvalue()
         assert __version__ in output_str
+        assert "Install method" in output_str
+        assert "uv" in output_str
+        assert "/opt/uv/tools/siesta/bin/python" in output_str
+        assert "/opt/uv/tools/siesta/lib/python/site-packages/siesta" in output_str
+        assert "3.11.9" in output_str
+        assert "uv tool upgrade siesta" in output_str
         assert "abc1234" in output_str
         assert "Test User" in output_str
 
     def test_version_command_shows_update_available(self, capture_output):
         """Test that version command shows when update is available."""
         with (
+            patch(
+                "siesta.cli.self_app.get_installation_metadata",
+                return_value={
+                    "method": "pip",
+                    "source": "pypi",
+                    "executable_path": "/usr/bin/python3",
+                    "package_path": "/site-packages/siesta",
+                    "python_version": "3.11.9",
+                    "update_command": [
+                        "/usr/bin/python3",
+                        "-m",
+                        "pip",
+                        "install",
+                        "--upgrade",
+                        "siesta",
+                    ],
+                    "update_command_error": None,
+                },
+            ),
             patch(
                 "siesta.cli.self_app.get_latest_github_release_version",
                 return_value=("99.0.0", None),
@@ -428,6 +492,18 @@ class TestSelfVersionCommand:
     def test_version_command_handles_network_errors(self, capture_output):
         """Test that version command surfaces fetch failure details."""
         with (
+            patch(
+                "siesta.cli.self_app.get_installation_metadata",
+                return_value={
+                    "method": "editable",
+                    "source": "pypi",
+                    "executable_path": "/usr/bin/python3",
+                    "package_path": "/workspace/siesta/src/siesta",
+                    "python_version": "3.11.9",
+                    "update_command": None,
+                    "update_command_error": "Editable installations cannot be auto-updated.",
+                },
+            ),
             patch(
                 "siesta.cli.self_app.get_latest_github_release_version",
                 return_value=(None, "GitHub API 401: Bad credentials"),

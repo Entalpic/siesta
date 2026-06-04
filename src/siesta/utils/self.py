@@ -48,6 +48,15 @@ if TYPE_CHECKING:
         last_check: float
         latest_version: str | None
 
+    class InstallationMetadata(TypedDict):
+        method: str
+        source: str
+        executable_path: str
+        package_path: str
+        python_version: str
+        update_command: list[str] | None
+        update_command_error: str | None
+
 
 # Cache file location (uses platform-appropriate directory)
 # - macOS: ~/Library/Caches/siesta
@@ -136,6 +145,36 @@ def get_installation_source() -> str:
         pass
 
     return "pypi"
+
+
+def get_installation_metadata() -> InstallationMetadata:
+    """Collect local diagnostics for the running siesta installation.
+
+    Returns
+    -------
+    InstallationMetadata
+        Local installation metadata, including executable and package paths.
+    """
+    import siesta
+
+    method = get_installation_method()
+    update_command = None
+    update_command_error = None
+
+    try:
+        update_command = get_update_command(method)
+    except ValueError as e:
+        update_command_error = str(e)
+
+    return {
+        "method": method,
+        "source": get_installation_source(),
+        "executable_path": str(Path(sys.executable).resolve()),
+        "package_path": str(Path(siesta.__file__).resolve().parent),
+        "python_version": sys.version.split()[0],
+        "update_command": update_command,
+        "update_command_error": update_command_error,
+    }
 
 
 def _get_latest_version_pypi(timeout: float = 5.0) -> tuple[str | None, str | None]:
