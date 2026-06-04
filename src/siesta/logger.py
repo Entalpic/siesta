@@ -201,13 +201,15 @@ class Logger(BaseLogger):
             raise KeyboardInterrupt()
         return response.strip() or default
 
-    def confirm(self, message: str) -> bool:
+    def confirm(self, message: str, default: bool = True) -> bool:
         """Confirm a message with the user.
 
         Parameters
         ----------
         message : str
             The message to confirm.
+        default : bool, optional
+            The default answer selected by the prompt, by default ``True``.
 
         Returns
         -------
@@ -221,7 +223,7 @@ class Logger(BaseLogger):
         """
         response = questionary.confirm(
             f"{self.prefix}{message}",
-            default=True,
+            default=default,
         ).ask()
         if response is None:
             raise KeyboardInterrupt()
