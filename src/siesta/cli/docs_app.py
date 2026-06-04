@@ -7,12 +7,14 @@ import subprocess
 import time
 from pathlib import Path
 from shutil import rmtree
+from subprocess import CompletedProcess
 from textwrap import dedent
-from typing import Annotated
+from typing import Annotated, cast
 
 from cyclopts import App, Parameter
 from watchdog.observers import Observer
 
+from siesta.utils import github
 from siesta.utils.common import (
     logger,
     resolve_path,
@@ -30,7 +32,6 @@ from siesta.utils.docs import (
     update_conf_py,
     write_rtd_config,
 )
-from siesta.utils import github
 
 docs_app = App(
     name="docs",
@@ -51,15 +52,15 @@ docs_app = App(
 @docs_app.command(name="init")
 def init_docs(
     path: str = "./docs",
-    as_main_deps: bool = None,
+    as_main_deps: bool | None = None,
     overwrite: bool = False,
-    deps: bool = None,
-    uv: bool = None,
+    deps: bool | None = None,
+    uv: bool | None = None,
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
     branch: str = "main",
     contents: str = "src/siesta/boilerplate",
     remote_assets: bool = False,
-    project_name: str = None,
+    project_name: str | None = None,
 ):
     """Initialize a Sphinx documentation project with Entalpic's standard configuration (also called within ``siesta project quickstart``).
 
@@ -146,13 +147,13 @@ def init_docs(
             as_main_deps = CLI_DEFAULTS["as_main_deps"]
 
     # Where the docs will be stored, typically `$CWD/docs`
-    path = resolve_path(path)
-    logger.info(f"Initializing docs at path: [r]{path}[/r]")
-    if path.exists():
+    resolved_path = resolve_path(path)
+    logger.info(f"Initializing docs at path: [r]{resolved_path}[/r]")
+    if resolved_path.exists():
         # docs folder already exists
         if not overwrite:
             # user doesn't want to overwrite -> abort
-            logger.warning(f"Path already exists: {path}")
+            logger.warning(f"Path already exists: {resolved_path}")
             logger.warning("Use --overwrite to overwrite.")
             logger.abort("Aborting.", exit=1)
 
@@ -179,11 +180,11 @@ def init_docs(
                 )
 
     # Execution phase: perform mutations only after all decisions are collected.
-    if path.exists():
+    if resolved_path.exists():
         logger.warning("🚧 Overwriting path.")
-        rmtree(path)
+        rmtree(resolved_path)
 
-    path.mkdir(parents=True)
+    resolved_path.mkdir(parents=True)
     logger.success("Docs initialized 📄")
 
     # Install dependencies if requested.
@@ -197,16 +198,16 @@ def init_docs(
 
     # Download and copy siesta pre-filled folder structure to the target directory
     copy_boilerplate(
-        path,
+        resolved_path,
         branch=branch,
         content_path=contents,
         overwrite=True,
         local=not remote_assets,
     )
     # Make empty dirs (_build and _static) in target directory
-    make_empty_folders(path)
+    make_empty_folders(resolved_path)
     # Update defaults from user config
-    overwrite_docs_files(path, interactive, project_name)
+    overwrite_docs_files(resolved_path, interactive, project_name)
 
     # Check if the ReadTheDocs YAML config exists
     has_rtd = Path(".readthedocs.yaml").exists()
@@ -221,7 +222,7 @@ def init_docs(
         + " [r]conf.py[/r] with the appropriate values.",
     )
 
-    build_docs(path)
+    build_docs(str(resolved_path))
 
 
 @docs_app.command(name="update")
@@ -257,9 +258,9 @@ def update(
         Run ``$ siesta self set-github-pat`` to configure one.
     """
     # Check if the path exists
-    path = resolve_path(path)
-    if not path.exists():
-        logger.abort(f"Path not found: {path}", exit=1)
+    resolved_path = resolve_path(path)
+    if not resolved_path.exists():
+        logger.abort(f"Path not found: {resolved_path}", exit=1)
 
     # Prompt collection phase: gather all confirmations up front.
     update_static = logger.confirm(
@@ -275,11 +276,11 @@ def update(
 
     # Execution phase: run only the selected mutating actions.
     if update_static:
-        static = path / "source" / "_static"
+        static = resolved_path / "source" / "_static"
         if not static.exists():
             logger.abort(f"Static folder not found: {static}", exit=1)
         copy_boilerplate(
-            dest=path,
+            dest=resolved_path,
             branch=branch,
             content_path=contents,
             overwrite=False,
@@ -289,7 +290,7 @@ def update(
         logger.success("Static files updated.")
 
     if update_conf:
-        update_conf_py(path, branch=branch, local=not remote_assets)
+        update_conf_py(resolved_path, branch=branch, local=not remote_assets)
         logger.success("[r]conf.py[/r] updated.")
 
     if update_precommit:
@@ -315,12 +316,12 @@ def build_docs(path: str = "./docs"):
     path : str, optional
         The path to your documentation folder.
     """
-    path = resolve_path(path)
-    if not path.exists():
-        logger.abort(f"Path not found: {path}", exit=1)
-    make = path / "Makefile"
+    resolved_path = resolve_path(path)
+    if not resolved_path.exists():
+        logger.abort(f"Path not found: {resolved_path}", exit=1)
+    make = resolved_path / "Makefile"
     if not make.exists():
-        logger.abort(f"Makefile not found in {path}.", exit=1)
+        logger.abort(f"Makefile not found in {resolved_path}.", exit=1)
     commands = [
         ["make", "clean"],
         ["make", "html"],
@@ -330,7 +331,10 @@ def build_docs(path: str = "./docs"):
         commands = [["uv", "run"] + command for command in commands]
     for c, command in enumerate(commands):
         with logger.loading(f"Running {' '.join(command)}..."):
-            result = run_command(command, cwd=str(path), check=False)
+            result = run_command(command, cwd=str(resolved_path), check=False)
+        if result is False:
+            logger.abort("Failed to build the docs.")
+        result = cast(CompletedProcess[str], result)
         if result.returncode != 0:
             logger.error(result.stderr, title="Build Error", as_panel=True)
             logger.abort("Failed to build the docs.")
@@ -348,7 +352,7 @@ def build_docs(path: str = "./docs"):
     logger.info(
         "Ask Victor if you want to automatically build and deploy the docs to ReadTheDocs."
     )
-    docs_path = (path / "build/html/index.html").relative_to(Path.cwd())
+    docs_path = (resolved_path / "build/html/index.html").relative_to(Path.cwd())
     logger.info(f"Local docs built in {docs_path}")
     logger.success("Open locally with [r]siesta docs open[/r]")
 
@@ -375,10 +379,10 @@ def watch_docs(
     build_docs(path)
 
     # Patterns to watch
-    patterns = [p.strip() for p in patterns.split(";")]
+    pattern_list = [p.strip() for p in patterns.split(";")]
 
     # Watch for changes
-    abd = AutoBuildDocs(patterns, build_docs, path=path)
+    abd = AutoBuildDocs(pattern_list, build_docs, path=path)
     observer = Observer()
     observer.schedule(abd, path=".", recursive=True)
     observer.start()
@@ -403,8 +407,8 @@ def open_docs(path: str = "./docs"):
     path : str, optional
         The path to your documentation folder.
     """
-    path = resolve_path(path)
-    index = path / "build/html/index.html"
+    resolved_path = resolve_path(path)
+    index = resolved_path / "build/html/index.html"
     if not index.exists():
         logger.abort(f"Index file not found: {index}", exit=1)
 
@@ -412,6 +416,10 @@ def open_docs(path: str = "./docs"):
     if platform.system() == "Darwin":  # macOS
         subprocess.call(("open", str(index)))
     elif platform.system() == "Windows":  # Windows
-        os.startfile(str(index))
+        startfile = getattr(os, "startfile", None)
+        if callable(startfile):
+            startfile(str(index))
+        else:
+            logger.abort("Opening docs is not supported on this platform.", exit=1)
     else:  # Linux variants
         subprocess.call(("xdg-open", str(index)))

@@ -27,7 +27,17 @@ def test_write_tests_infra(tmp_path_chdir):
 
     assert (tmp_path_chdir / "tests" / "test_import.py").exists()
     txt = (tmp_path_chdir / "tests" / "test_import.py").read_text()
-    assert "import some_project" in txt
+    assert "importlib.import_module('some_project')" in txt
+
+
+def test_write_tests_infra_escapes_generated_import(tmp_path_chdir):
+    """Generated import tests treat project names as string data."""
+    write_tests_infra('some_project");\nimport os\n#')
+
+    txt = (tmp_path_chdir / "tests" / "test_import.py").read_text()
+
+    assert "\nimport os\n" not in txt
+    assert "importlib.import_module(" in txt
 
 
 def test_write_tests_infra_already_exists(tmp_path_chdir, capture_output):

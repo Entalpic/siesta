@@ -118,6 +118,7 @@ def write_tests_infra(project_name: str) -> None:
     tests_dir.mkdir(parents=True, exist_ok=True)
     test_example = dedent(rf'''
     # Copyright 2025 Entalpic
+    import importlib
     from pathlib import Path
 
     import pytest
@@ -136,7 +137,7 @@ def write_tests_infra(project_name: str) -> None:
 
     def test_import():
         """Test the project's import."""
-        import {import_name}  # noqa: F401
+        importlib.import_module({import_name!r})
 
 
     def test_copyrights():

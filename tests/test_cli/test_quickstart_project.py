@@ -146,9 +146,9 @@ def test_quickstart_test_scaffold_uses_normalized_import(tmp_path_chdir):
     test_file = tmp_path_chdir / "tests" / "test_import.py"
     content = test_file.read_text()
 
-    assert content.startswith("# Copyright 2025 Entalpic")
-    assert "from pathlib import Path\n\nimport pytest" in content
-    assert "import siesta_quickstart_3qwvcd  # noqa: F401" in content
+    assert content.startswith("# Copyright ") and "Entalpic" in content.splitlines()[0]
+    assert "import importlib\nfrom pathlib import Path" in content
+    assert "importlib.import_module('siesta_quickstart_3qwvcd')" in content
 
 
 def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
@@ -383,6 +383,34 @@ def test_quickstart_interactive_respects_explicit_docs_path(
 
     assert prompted is False
     assert init_docs_kwargs["path"] == "custom-docs"
+
+
+def test_quickstart_fresh_project_delegates_docs_uv_detection(
+    tmp_path_chdir, monkeypatch
+):
+    """Fresh quickstart lets docs init detect the uv lockfile after uv init."""
+    init_docs_kwargs = {}
+
+    monkeypatch.setattr("siesta.cli.project_app.logger.confirm", lambda *_a, **_k: True)
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
+    monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(
+        "siesta.cli.docs_app.init_docs",
+        lambda **kwargs: init_docs_kwargs.update(kwargs),
+    )
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    try:
+        app(["project", "quickstart", "--no-agents"])
+    except SystemExit as e:
+        assert e.code == 0
+
+    assert init_docs_kwargs["uv"] is None
 
 
 def test_quickstart_installs_agents(tmp_path_chdir, capture_output):

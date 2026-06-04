@@ -345,7 +345,7 @@ def quickstart_project(
             as_main_deps=bool(as_main_deps),
             overwrite=overwrite,
             deps=deps,
-            uv=bool(docs_with_uv),
+            uv=docs_with_uv,
             interactive=False,
             branch=branch,
             contents=contents,
