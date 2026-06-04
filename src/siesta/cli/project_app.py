@@ -342,10 +342,10 @@ def quickstart_project(
 
         init_docs(
             path=docs_path,
-            as_main_deps=as_main_deps,
+            as_main_deps=bool(as_main_deps),
             overwrite=overwrite,
             deps=deps,
-            uv=docs_with_uv,
+            uv=bool(docs_with_uv),
             interactive=False,
             branch=branch,
             contents=contents,
@@ -483,10 +483,10 @@ def tree_project(path: str = ".", ignore_from_gitignore: bool = True):
         Whether to ignore files from the ``.gitignore`` file in ``path``.
         Only useful if ``path`` is a git repository.
     """
-    path = resolve_path(path)
-    if not path.exists():
-        logger.abort(f"Path not found: {path}", exit=1)
-    gitignore_path = path / ".gitignore"
+    resolved_path = resolve_path(path)
+    if not resolved_path.exists():
+        logger.abort(f"Path not found: {resolved_path}", exit=1)
+    gitignore_path = resolved_path / ".gitignore"
     if ignore_from_gitignore and gitignore_path.exists():
         ignore = parse_gitignore(gitignore_path)
     else:
@@ -495,7 +495,7 @@ def tree_project(path: str = ".", ignore_from_gitignore: bool = True):
     logger.info(
         ".\n"
         + make_labeled_tree(
-            path,
+            resolved_path,
             ignore,
             max_line_length=term_cols - 4,  # account for panel borders
         ),
