@@ -58,7 +58,7 @@ def main():
         app()
     except KeyboardInterrupt:
         interrupted = True
-        logger.abort("\nAborted.", exit=1)
+        logger.abort("\nAborted.", exit=130)
     finally:
         # Show update message at the end (if available)
         if not interrupted:

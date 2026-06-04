@@ -154,10 +154,9 @@ def quickstart_project(
     explo: bool, optional
         Whether to scaffold the agentic-exploration workflow (``Human.md``,
         ``AGENT.md``, bundled ``.claude/skills/agentic-exploration/``). When
-        neither ``--explo`` nor ``--no-explo`` is given: prompts the user in
-        an interactive TTY; defaults to ``True`` in non-interactive / CI
-        environments so piped runs are never blocked on ``EOFError``. Lifecycle
-        docs (``research_plan.md``, ``plan.md``, ``TODO.md``, ``notes.md``,
+        neither ``--explo`` nor ``--no-explo`` is given: prompts in interactive
+        mode and defaults to ``False`` in non-interactive mode. Lifecycle docs
+        (``research_plan.md``, ``plan.md``, ``TODO.md``, ``notes.md``,
         ``handoff.md``) are intentionally not created at init.
     """
     if as_app and as_pkg:
@@ -195,11 +194,6 @@ def quickstart_project(
             agents = CLI_DEFAULTS["agents"]
         if explo is None:
             explo = CLI_DEFAULTS["explo"]
-        # ``explo`` non-interactive default (True) is applied later, after the
-        # TTY check, so the prompt is still shown when stdin is a terminal.
-        # ``explo`` intentionally has no non-interactive default: when the user
-        # passes neither ``--explo`` nor ``--no-explo`` we always prompt them
-        # later with an explanation of what the workflow scaffolds.
 
     # Prompt collection phase: gather all unresolved decisions before mutations.
     if deps is None:
@@ -230,8 +224,8 @@ def quickstart_project(
     if agents is None:
         agents = logger.confirm("Would you like to install recommended agent assets?")
 
-    # Agentic exploration workflow: scaffold last so it layers on top of the
-    # project surfaces it documents (tests/docs/etc. have been decided by now).
+    # Agentic exploration is opt-in for non-interactive runs because it writes
+    # several agent-facing files beyond the base Python scaffold.
     if explo is None:
         explo = logger.confirm(
             "Would you like to scaffold the agentic-exploration workflow "
@@ -336,29 +330,6 @@ def quickstart_project(
         print_summary(summary)
         logger.info("Agent assets installed.")
 
-    # Agentic exploration workflow: scaffold last so it layers on top of the
-    # project surfaces it documents (tests/docs/etc. have been decided by now).
-    # When neither --explo nor --no-explo is given:
-    #   - interactive TTY  -> prompt the user (the flag explanation is shown).
-    #   - non-interactive  -> default to True so CI/piped runs are never blocked.
-    if explo is None:
-        import sys
-
-        if sys.stdin.isatty():
-            logger.info(
-                "The agentic-exploration workflow scaffolds three surfaces for "
-                "AI-assisted development:\n"
-                "  - [r]Human.md[/r]: how a human collaborates on this project.\n"
-                "  - [r]AGENT.md[/r]: how an AI agent should explore and build here.\n"
-                "  - [r].claude/skills/agentic-exploration/[/r]: a bundled skill "
-                "with templates and lifecycle docs (research_plan, plan, TODO, "
-                "notes, handoff).\n"
-                "Pass [r]--explo[/r] or [r]--no-explo[/r] to skip this prompt."
-            )
-            explo = logger.confirm("Scaffold the agentic-exploration workflow?")
-        else:
-            # Non-interactive: default to scaffolding the workflow.
-            explo = True
     if explo:
         layout = "app" if as_app else "pkg" if as_pkg else "lib"
         setup_agentic_exploration(

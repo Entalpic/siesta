@@ -122,17 +122,15 @@ def test_quickstart_with_no_explo_creates_no_agentic_files(
 
     assert not Path(tmp_path_chdir, "Human.md").exists()
     assert not Path(tmp_path_chdir, "AGENT.md").exists()
-    assert not Path(tmp_path_chdir, ".claude").exists()
+    assert not Path(
+        tmp_path_chdir, ".claude", "skills", "agentic-exploration"
+    ).exists()
 
 
-def test_quickstart_default_explo_in_non_interactive_creates_agentic_files(
-    tmp_path_chdir, capture_output, monkeypatch
+def test_quickstart_default_explo_in_non_interactive_skips_agentic_files(
+    tmp_path_chdir, capture_output
 ):
-    """No --explo / --no-explo in non-interactive env defaults to explo=True."""
-    import sys
-
-    # Simulate non-interactive (piped) stdin — isatty() returns False.
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    """No --explo / --no-explo in non-interactive mode defaults to explo=False."""
 
     with capture_output():
         try:
@@ -152,9 +150,11 @@ def test_quickstart_default_explo_in_non_interactive_creates_agentic_files(
         except SystemExit as e:
             assert e.code == 0
 
-    assert Path(tmp_path_chdir, "Human.md").exists()
-    assert Path(tmp_path_chdir, "AGENT.md").exists()
-    assert Path(tmp_path_chdir, ".claude", "skills", "agentic-exploration").exists()
+    assert not Path(tmp_path_chdir, "Human.md").exists()
+    assert not Path(tmp_path_chdir, "AGENT.md").exists()
+    assert not Path(
+        tmp_path_chdir, ".claude", "skills", "agentic-exploration"
+    ).exists()
 
 
 def test_quickstart_explo_creates_agentic_surface(tmp_path_chdir, capture_output):
@@ -244,7 +244,7 @@ def test_quickstart_respects_no_tests_and_no_actions(tmp_path_chdir, capture_out
 def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
     """Test quickstart collects prompts before any mutating command runs."""
     events: list[str] = []
-    prompts = iter([True, True, True, True, True, True, True, True])
+    prompts = iter([True, True, True, True, True, True, True, True, True])
 
     def fake_confirm(message: str) -> bool:
         events.append(f"confirm:{message}")
@@ -286,6 +286,9 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
         cli, "install_quickstart", lambda *a, **k: (events.append("agents"), {})[1]
     )
     monkeypatch.setattr(cli, "print_summary", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cli, "setup_agentic_exploration", lambda **_kwargs: events.append("explo")
+    )
 
     try:
         app(["project", "quickstart", "-i"])
