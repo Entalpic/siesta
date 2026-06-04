@@ -28,7 +28,7 @@ graph TB
 
     subgraph cli["CLI Domain Modules (command groups)"]
         DOCS["docs_app<br/>init / build / watch / open / update"]
-        PROJ["project_app<br/>quickstart / setup-tests / tree"]
+        PROJ["project_app<br/>quickstart / setup-tests<br/>add-skill / tree"]
         AGENTS["agents_app<br/>add-skill / add-rule<br/>add-constitution / quickstart"]
         SELF["self_app<br/>version / update / *-github-pat<br/>show-deps / tab-completions"]
     end
@@ -37,6 +37,7 @@ graph TB
         UAGENTS["agents.py<br/>catalog, resolution,<br/>conflict-aware writer, installers"]
         UDOCS["docs.py<br/>boilerplate copy, conf.py,<br/>AutoBuildDocs watcher"]
         UPROJ["project.py<br/>tests infra, CI, gitignore"]
+        UAGENTIC["agentic.py<br/>Human/AGENT rendering,<br/>agentic-exploration skill copy"]
         USELF["self.py<br/>install-method detection,<br/>version compare, update"]
         UGH["github.py<br/>PyGithub client, remote fetch"]
         UCOMMON["common.py<br/>run_command, paths, deps,<br/>pre-commit merge"]
@@ -48,16 +49,18 @@ graph TB
         LOG["logger.py<br/>Rich + questionary I/O"]
         COMPL["completions.py<br/>framework-agnostic shell hooks"]
         ASSETS["agents_assets/<br/>(bundled catalog)"]
+        SKILLS["skills/agentic-exploration/<br/>(bundled workflow skill)"]
         BOIL["boilerplate/<br/>(bundled Sphinx tree)"]
-        EXT["External: uv, git, make,<br/>GitHub API, PyPI, OS keyring"]
+        EXT["External: uv, git, make,<br/>GitHub/PyPI HTTP, OS keyring"]
     end
 
     MAIN --> DOCS & PROJ & AGENTS & SELF
     DOCS --> UDOCS & UCOMMON
-    PROJ --> UPROJ & UAGENTS & UCOMMON & UTREE
+    PROJ --> UPROJ & UAGENTS & UAGENTIC & UCOMMON & UTREE
     AGENTS --> UAGENTS
     SELF --> USELF & UGH & COMPL & UCOMMON
     UAGENTS --> ASSETS & LOG
+    UAGENTIC --> SKILLS & LOG
     UDOCS --> UGH & BOIL & UCOMMON
     USELF --> UGH & EXT
     UCOMMON --> EXT
@@ -72,11 +75,12 @@ modules are responsible for *execution* (filesystem writes, subprocess calls, ne
 I/O). This keeps the mutating primitives testable in isolation and makes the
 command-lifecycle contract (below) enforceable at a single layer.
 
-Two subsystems are intentionally decoupled from the rest. [completions.py](src/siesta/completions.py)
+Three pieces are intentionally decoupled from the command modules. [completions.py](src/siesta/completions.py)
 is written to be framework-agnostic (it never imports `cyclopts`; the completion generator
 is injected as a callable), so it can be unit-tested and even retargeted to another CLI by
-changing one constant. The bundled `agents_assets/` and `boilerplate/` directories are
-**data, not code** — shipped inside the wheel and read at runtime via `importlib.resources`.
+changing one constant. The bundled `agents_assets/`, `skills/agentic-exploration/`, and
+`boilerplate/` directories are **data, not code** — shipped inside the wheel and read at
+runtime via `importlib.resources`.
 
 ## Repository Layout
 
@@ -103,14 +107,18 @@ siesta/
 │   ├── utils/                  # execution layer (writes, subprocess, network)
 │   │   ├── agents.py            # asset catalog, resolution, conflict-aware writer
 │   │   ├── docs.py / project.py # scaffolding generators
+│   │   ├── agentic.py           # Human.md / AGENT.md renderer + workflow skill copy
 │   │   ├── self.py / github.py  # self-update + GitHub/PyPI access
 │   │   ├── common.py / config.py / tree.py
 │   │
-│   ├── agents_assets/          # bundled Agent Asset Catalog (data, not code)
+│   ├── agents_assets/          # Agent Asset Catalog used by `siesta agents`
 │   │   ├── skills/<name>/SKILL.md
 │   │   ├── rules/<name>.mdc
 │   │   ├── constitutions/<name>/{AGENTS.md, CLAUDE.md}
 │   │   └── quickstart.yaml       # Quickstart Config (curated default subset)
+│   │
+│   ├── skills/                 # bundled project workflow skills (data, not code)
+│   │   └── agentic-exploration/{SKILL.md, references/, templates/}
 │   │
 │   └── boilerplate/            # bundled Sphinx project template (data, not code)
 │       ├── Makefile / make.bat
@@ -134,9 +142,11 @@ siesta/
 Two structural conventions are worth internalizing. **`cli/` vs `utils/` is the
 orchestration/execution split** described above — when tracing a command, start in
 `cli/<group>_app.py` for the lifecycle and decision logic, then follow into the matching
-`utils/` module for the actual mutations. **`agents_assets/` and `boilerplate/` are bundled
-data**, included in the wheel/sdist via the `[tool.hatch.build]` config in `pyproject.toml`
-and read at runtime through `importlib.resources` — never imported.
+`utils/` module for the actual mutations. **Bundled data roots have separate ownership**:
+`agents_assets/` is the Agent Asset Catalog used by `siesta agents`, `skills/agentic-exploration/`
+is the project workflow copied by `siesta project --explo` / `project add-skill`, and
+`boilerplate/` is the Sphinx template tree. All three are included in the wheel and read at
+runtime through `importlib.resources` — never imported as Python modules.
 
 ### Architecture Decision Records
 
@@ -151,16 +161,6 @@ relevant sections here:
 | [0003](docs/adr/0003-secret-handling-policy.md) | Secret Handling Policy | PAT handling in `self_app` / `github` |
 | [0004](docs/adr/0004-cross-provider-agent-assets.md) | Cross-Provider Agent Asset Installation | Providers, Asset Scope, Mirroring |
 
-The `--explo` flag is an exception: it has no entry in `CLI_DEFAULTS`. When neither `--explo` nor `--no-explo` is supplied, the behavior depends on the terminal:
-- **Interactive TTY** (`sys.stdin.isatty()` is `True`): the user is prompted with an explanation of the workflow surfaces.
-- **Non-interactive / piped** (`sys.stdin.isatty()` is `False`): defaults to `True` so CI or scripted runs are never blocked on `EOFError`.
-
-```python
-if not interactive:
-    if deps is None:
-        deps = CLI_DEFAULTS["deps"]   # defaults to True
-```
-
 ## Core Concepts
 
 ### The Command Lifecycle (Ordering Contract)
@@ -174,28 +174,27 @@ The system's central invariant is that **every command runs three phases in orde
 
 This **Ordering Contract** guarantees a user is never left with a half-mutated project
 because a prompt appeared mid-write. It is visible as explicitly commented sections in the
-command bodies — see [project_app.py](src/siesta/cli/project_app.py#L711-L838) where
-`quickstart` collects every `confirm()` answer up front, then performs all `uv init`,
-dependency, test, docs, and agent-asset writes afterward.
+command bodies — for example, `quickstart_project` in
+[project_app.py](src/siesta/cli/project_app.py) collects every decision up front, then
+performs all `uv init`, dependency, test, docs, agent-asset, and agentic-workflow writes
+afterward.
 
 ### Input Precedence & Decision Ownership
 
 Decisions resolve in a fixed order: **explicit CLI flags win**, then non-interactive
-**`CLI_DEFAULTS`** ([config.py](src/siesta/utils/config.py#L26)), then interactive prompts
-for whatever remains unspecified. A `bool | None` flag signature is the mechanism: `None`
+**`CLI_DEFAULTS`** ([config.py](src/siesta/utils/config.py)), then interactive prompts for
+whatever remains unspecified. A `bool | None` flag signature is the mechanism: `None`
 means "unspecified → may prompt", an explicit `True`/`False` short-circuits the prompt.
 
 **Decision Ownership** complements this: the top-level invoked command owns prompt
 collection and passes *explicit* decisions down to helpers. When `project quickstart`
 delegates to `setup_tests(...)` and `init_docs(...)`, it calls them with
-`interactive=False` and concrete values so the nested commands never re-prompt — see
-[project_app.py:794](src/siesta/cli/project_app.py#L794) and
-[project_app.py:818](src/siesta/cli/project_app.py#L818).
+`interactive=False` and concrete values so the nested commands never re-prompt.
 
 ### Mutation & the Conflict-Aware Writer
 
 A **Mutation** is any filesystem write or external side effect. All Agent-Asset writes
-funnel through a single conflict policy in [agents.py](src/siesta/utils/agents.py#L315-L464):
+funnel through a single conflict policy in [agents.py](src/siesta/utils/agents.py):
 `_decide_action` maps `(dest exists?, --force, --backup, -i)` to one of `write`,
 `overwrite`, `backup_write`, or `skip`; `write_file` / `write_dir` then apply it. The
 non-interactive default for an existing target is **skip** (never silently clobber).
@@ -215,7 +214,7 @@ The agent-assets domain is defined by three orthogonal axes, every install resol
 
 **Provider Mirroring** is the guarantee that an asset is equivalent across providers,
 differing only in vendor-required format. The one real transform is
-[`mdc_to_claude`](src/siesta/utils/agents.py#L217): a Cursor `.mdc` rule's `globs`/
+[`mdc_to_claude`](src/siesta/utils/agents.py): a Cursor `.mdc` rule's `globs`/
 `alwaysApply` frontmatter is translated to Claude's `paths` frontmatter, body copied
 verbatim. Cursor receives the canonical `.mdc` unchanged.
 
@@ -226,9 +225,9 @@ catalog rather than persisted entities.
 
 ### Agent Asset Catalog (bundled, read-only)
 
-The only install source is the directory tree shipped inside the package at
-[src/siesta/agents_assets/](src/siesta/agents_assets/), accessed via
-`importlib.resources.files("siesta")`:
+The only install source for `siesta agents` is the directory tree shipped inside the package
+at [src/siesta/agents_assets/](src/siesta/agents_assets/), accessed via
+`importlib.resources.files("siesta") / "agents_assets"`:
 
 ```
 agents_assets/
@@ -241,8 +240,15 @@ agents_assets/
 The **Constitution** model is the subtlest: `AGENTS.md` is the **source of truth** and is
 *always* written (Cursor compatibility, harmless for Claude); `CLAUDE.md` is merely an
 `@AGENTS.md` import stub. When a `CLAUDE.md` already exists, the installer **prepends** the
-import line rather than overwriting, preserving user content
-([agents.py:672](src/siesta/utils/agents.py#L672)).
+import line rather than overwriting, preserving user content.
+
+### Agentic Exploration Workflow Skill (bundled, read-only)
+
+The agentic exploration workflow is not part of the Agent Asset Catalog. Its source tree is
+[src/siesta/skills/agentic-exploration/](src/siesta/skills/agentic-exploration/), also
+accessed via `importlib.resources`. `utils/agentic.py` renders the two project-root
+reference files from `references/` and copies the full skill tree into the target project at
+`.claude/skills/agentic-exploration/`.
 
 ### Install Summary
 
@@ -253,9 +259,8 @@ The common return value across installers — `dict[str, list[str]]` with keys `
 ### Update-Check Cache
 
 The only persisted state besides the keyring: a JSON file in the platform cache dir
-(`platformdirs.user_cache_dir`) holding `{last_check, latest_version}`
-([self.py:344](src/siesta/utils/self.py#L344)). It throttles background update checks to
-once per `SIESTA_UPDATE_CHECK_HOURS` (default 24).
+(`platformdirs.user_cache_dir`) holding `{last_check, latest_version}`. It throttles
+background update checks to once per `SIESTA_UPDATE_CHECK_HOURS` (default 24).
 
 ## Component Breakdown
 
@@ -263,8 +268,8 @@ once per `SIESTA_UPDATE_CHECK_HOURS` (default 24).
 **Location**: [src/siesta/cli/main_app.py](src/siesta/cli/main_app.py)
 Builds the root `cyclopts.App`, registers the four sub-apps, and exposes `main()` (the
 `siesta` console script). `main()` wraps `app()` to translate `KeyboardInterrupt` into a
-clean **Cancellation** (exit 130 via `logger.abort`), and fires a non-blocking background
-update check whose result is printed only on clean exit.
+clean abort path via `logger.abort`, and fires a non-blocking background update check whose
+result is printed only on clean exit.
 
 ### `agents_app` + `utils/agents`
 **Location**: [agents_app.py](src/siesta/cli/agents_app.py), [utils/agents.py](src/siesta/utils/agents.py)
@@ -279,10 +284,12 @@ before any write, then reuses the per-asset installers.
 **Location**: [project_app.py](src/siesta/cli/project_app.py), [utils/project.py](src/siesta/utils/project.py)
 `quickstart` is the flagship command and the clearest example of the lifecycle and Decision
 Ownership: it requires `uv`, resolves all of `precommit/docs/deps/ipdb/tests/actions/`
-`gitignore/agents`, then orchestrates `uv init`, dependency installs, pre-commit, tests
-(delegating to `setup_tests`), CI, gitignore, docs (delegating to `init_docs`), and agent
-assets. `utils/project` writes the pytest scaffold, the GitHub Actions test workflow, and a
-language-appropriate `.gitignore`.
+`gitignore/agents/explo`, then orchestrates `uv init`, dependency installs, pre-commit,
+tests (delegating to `setup_tests`), CI, gitignore, docs (delegating to `init_docs`), Agent
+Assets, and optionally the agentic exploration workflow (delegating to
+`setup_agentic_exploration`). `project add-skill agentic-exploration` retrofits that same
+workflow into an existing project. `utils/project` writes the pytest scaffold, the GitHub
+Actions test workflow, and a language-appropriate `.gitignore`.
 
 ### `docs_app` + `utils/docs`
 **Location**: [docs_app.py](src/siesta/cli/docs_app.py), [utils/docs.py](src/siesta/utils/docs.py)
@@ -338,8 +345,9 @@ flowchart TD
     H --> I[pre-commit install]
     I --> J[ipdb / setup_tests / CI / gitignore]
     J --> K[init_docs delegated, interactive=False]
-    K --> L[install_quickstart agent assets]
-    L --> M[Render labeled project tree]
+    K --> L[Optional: install_quickstart agent assets]
+    L --> N[Optional: setup_agentic_exploration]
+    N --> M[Render labeled project tree]
 ```
 
 The flow embodies the Ordering Contract end-to-end: nothing under "Execution" runs until
@@ -347,13 +355,22 @@ every decision above it is fixed, and delegated sub-commands receive explicit va
 
 ### Agentic Exploration Workflow
 
-`setup_agentic_exploration()` in `utils/agentic.py` is the core of the agentic scaffolding path:
+`setup_agentic_exploration()` in `utils/agentic.py` is the core of the agentic scaffolding
+path:
 
-1. Builds a substitution table from project name, `tests` flag, and `docs` flag.
-2. Calls `write_agentic_reference_files()` which renders `references/human.md` and `references/agent.md` from the bundled skill and writes them as `Human.md` / `AGENT.md` at the project root.
-3. Calls `copy_agentic_skill()` which copies the entire bundled `skills/agentic-exploration/` tree into `.claude/skills/agentic-exploration/`.
+1. Sanitizes the project name before putting it into AI-facing Markdown.
+2. Builds a substitution table from project name, project layout, `tests` flag, and `docs`
+   flag.
+3. Calls `write_agentic_reference_files()` which renders `references/human.md` and
+   `references/agent.md` from the bundled workflow skill and writes them as `Human.md` /
+   `AGENT.md` at the project root.
+4. Calls `copy_agentic_skill()` which copies the entire bundled
+   `skills/agentic-exploration/` tree into `.claude/skills/agentic-exploration/`.
 
-The same function is called by both `quickstart_project` (line-up: scaffold last, after tests/docs surfaces are decided) and `add_skill agentic-exploration` (retrofitting an existing project).
+The same function is called by both `project quickstart` (when the `explo` decision is true)
+and `project add-skill agentic-exploration` (retrofitting an existing project). Lifecycle
+documents (`research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, `handoff.md`) are not
+created at init; they remain templates until real work calls for them.
 
 
 ### Agent-asset install (conflict resolution)
@@ -370,14 +387,15 @@ existing `CLAUDE.md` by prepending `@AGENTS.md` instead of clobbering.
 - **Terminal I/O**: `rich` (output, panels, spinners) + `questionary` (interactive prompts).
 - **YAML / config**: `ruamel.yaml` (round-trip pre-commit merge, safe loads), JSON for
   `dependencies.json` and the update cache.
-- **VCS / remote**: `PyGithub` for the GitHub API; `keyring` for PAT storage; `git`/`gh`
-  invoked as subprocesses.
+- **VCS / remote**: `PyGithub` for the GitHub API; `keyring` for PAT storage; `git`
+  invoked as a subprocess for docs metadata; `urllib.request` and `requests` for limited
+  HTTP fetches.
 - **Docs**: Sphinx + AutoAPI ecosystem (build-time/dev deps), `watchdog` for `docs watch`.
 - **Packaging / runtime**: `hatchling` build backend; `uv` as the assumed project manager;
   `platformdirs` for cache location; `packaging.Version` for comparisons; `gitignore-parser`
   for tree filtering.
 - **Python**: `>= 3.11`. Source under `src/siesta`; bundled non-code assets
-  (`agents_assets/`, `boilerplate/`, `*.json`, `*.yaml`) are accessed via
+  (`agents_assets/`, `skills/`, `boilerplate/`, `*.json`, `*.yaml`) are accessed via
   `importlib.resources` and included in the wheel/sdist.
 
 ## Key Design Decisions
@@ -385,9 +403,10 @@ existing `CLAUDE.md` by prepending `@AGENTS.md` instead of clobbering.
 - **Three-phase command lifecycle (validate → collect → mutate).** The defining
   invariant; prevents partially-applied changes and makes interactive and non-interactive
   runs behave identically up to the prompt boundary.
-- **Local bundled assets are the default install source; remote is opt-in.** `docs` and
-  `agents` commands read from the wheel by default and require `--remote-assets` (+ a PAT)
-  to hit GitHub — fast, offline-capable, and reproducible by default.
+- **Local bundled data is the default install source.** `siesta agents` always installs from
+  the bundled Agent Asset Catalog. `docs` and `project quickstart` read bundled boilerplate
+  by default and use `--remote-assets` (+ a PAT) only when the user asks for GitHub-fetched
+  assets.
 - **Single conflict-aware writer for all asset mutations.** Skip/overwrite/backup logic
   exists in exactly one place, so the "never silently clobber" guarantee is enforced
   uniformly rather than re-implemented per command.
@@ -402,15 +421,19 @@ existing `CLAUDE.md` by prepending `@AGENTS.md` instead of clobbering.
   fail-closed confirmation.
 - **`bool | None` flag convention.** A uniform, framework-friendly encoding of
   "unspecified vs. explicitly set" that powers Input Precedence without bespoke parsing.
-
-**Single-module CLI**: All command definitions live in `cli.py`. This makes the command surface immediately discoverable without tracing imports. The trade-off is a ~1300-line file; this is acceptable because commands are thin and the file is organized in clear sections.
-
-**Functions as commands, not classes**: cyclopts decorates plain functions rather than method classes. This avoids ceremony and matches the stateless nature of scaffolding operations. Each command is fully self-contained.
-
-**`requests` for gitignore only**: `utils/project.py` imports `requests` to download the Python gitignore template, while all other HTTP access goes through PyGithub or `urllib.request`. This inconsistency reflects organic growth — `requests` should likely be replaced with `urllib.request` to eliminate the dependency, or the gitignore fetch should be bundled.
-
-**Boilerplate as package data, remote as opt-in**: Bundling boilerplate avoids mandatory network access and a mandatory PAT. The `--remote-assets` escape hatch exists for cases where the bundled version is stale and the engineer wants the latest CSS/configuration without waiting for a siesta release. The version gap is a deliberate design constraint: siesta releases drive boilerplate updates.
-
-**`# :siesta: <update>` markers in conf.py**: The update boundary markers allow `siesta docs update` to refresh Entalpic's Sphinx plugin configuration in user projects without clobbering their project-specific customizations (author, version, custom extensions). This solves the "generated file drift" problem without requiring users to track upstream changes manually.
-
-**Agentic exploration workflow**: The branch `feat-agentic-research-workflow` introduces `siesta project quickstart --explo` and `siesta project add-skill agentic-exploration`. These commands scaffold `Human.md` / `AGENT.md` at the project root and copy the bundled skill under `.claude/skills/agentic-exploration/`. Template placeholders known at scaffold time (`[🙋 Project name]`, `[🙋 package name]`, `[🙋 test command]`, `[🙋 docs command]`) are substituted; researcher-owned placeholders are preserved for manual authoring. Lifecycle documents (`research_plan.md`, `plan.md`, `TODO.md`, `notes.md`, `handoff.md`) are **not** created at init — the agent materializes them from templates only when real work calls for them.
+- **Modular CLI package.** Command definitions live in domain modules under `cli/`, not a
+  flat `cli.py`; only the executable contract is stable.
+- **Functions as commands, not classes.** `cyclopts` decorates plain functions, matching the
+  stateless nature of scaffolding operations and keeping each command self-contained.
+- **Project workflow skill is separate from Agent Assets.** `project quickstart --explo` and
+  `project add-skill agentic-exploration` scaffold `Human.md`, `AGENT.md`, and the bundled
+  `.claude/skills/agentic-exploration/` workflow from `src/siesta/skills/`, while
+  `siesta agents` installs Provider-mirrored Agent Assets from `src/siesta/agents_assets/`.
+- **`requests` for gitignore only.** `utils/project.py` imports `requests` to download the
+  Python gitignore template, while most other remote access goes through PyGithub or
+  `urllib.request`. This inconsistency reflects organic growth — `requests` should likely be
+  replaced with `urllib.request` to eliminate the dependency, or the gitignore fetch should
+  be bundled.
+- **`# :siesta: <update>` markers in `conf.py`.** The update boundary markers allow
+  `siesta docs update` to refresh Entalpic's Sphinx plugin configuration in user projects
+  without clobbering their project-specific customizations.
