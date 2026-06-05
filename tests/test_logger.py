@@ -27,6 +27,9 @@ def test_prompt_uses_questionary_text(logger, monkeypatch):
 
     monkeypatch.setattr("siesta.logger.questionary.text", fake_text)
     assert logger.prompt("Project name", default="proj") == "value"
+    assert "[grey50 bold]" not in asked["message"]
+    assert "[/grey50 bold]" not in asked["message"]
+    assert asked["message"].startswith("[test | ")
     assert asked["message"].endswith("Project name")
     assert asked["default"] == "proj"
 
@@ -57,6 +60,9 @@ def test_confirm_uses_questionary_confirm(logger, monkeypatch):
 
     monkeypatch.setattr("siesta.logger.questionary.confirm", fake_confirm)
     assert logger.confirm("Continue?") is True
+    assert "[grey50 bold]" not in asked["message"]
+    assert "[/grey50 bold]" not in asked["message"]
+    assert asked["message"].startswith("[test | ")
     assert asked["message"].endswith("Continue?")
     assert asked["default"] is True
 
