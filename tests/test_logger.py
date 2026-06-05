@@ -159,3 +159,11 @@ def test_confirm_secret_declines_eof(logger):
 def test_confirm_secret_declines_non_tty(logger):
     with patch("sys.stdin.isatty", return_value=False):
         assert logger.confirm_secret("Reveal secret?") is False
+
+
+def test_checkbox_empty_choices_skips_questionary(logger, monkeypatch):
+    def fail_checkbox(*_args, **_kwargs):
+        raise AssertionError("questionary.checkbox should not be called")
+
+    monkeypatch.setattr("siesta.logger.questionary.checkbox", fail_checkbox)
+    assert logger.checkbox("Select items:", []) == []

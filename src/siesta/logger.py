@@ -275,6 +275,8 @@ class Logger(BaseLogger):
         KeyboardInterrupt
             If the prompt is cancelled (for example with Ctrl+C).
         """
+        if not choices:
+            return []
         response = questionary.checkbox(
             f"{self.questionary_prefix}{message}", choices=choices
         ).ask()

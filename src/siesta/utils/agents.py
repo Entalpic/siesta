@@ -69,6 +69,39 @@ def available_constitutions() -> list[str]:
     return sorted(p.name for p in CONSTITUTIONS_DIR.iterdir() if p.is_dir())
 
 
+def _display_path(path: Path | str) -> str:
+    """Return a filesystem path as a CWD-relative display string.
+
+    Parameters
+    ----------
+    path : Path | str
+        Filesystem path to show in CLI prompts and summaries.
+
+    Returns
+    -------
+    str
+        ``path`` rendered relative to the current working directory.
+    """
+    cwd = Path.cwd()
+    target = Path(path)
+    if not target.is_absolute():
+        target = cwd / target
+
+    if target.anchor != cwd.anchor:
+        return str(target)
+
+    cwd_parts = cwd.parts
+    target_parts = target.parts
+    common = 0
+    for cwd_part, target_part in zip(cwd_parts, target_parts, strict=False):
+        if cwd_part != target_part:
+            break
+        common += 1
+
+    parents = [".."] * (len(cwd_parts) - common)
+    return str(Path(*parents, *target_parts[common:]))
+
+
 # ---------------------------------------------------------------------------
 # Provider + scope resolution
 # ---------------------------------------------------------------------------
@@ -114,6 +147,24 @@ def resolve_scope(local: bool, global_: bool) -> str:
     if local and global_:
         logger.abort("Cannot use both --local and --global.")
     return "global" if global_ else "local"
+
+
+def scope_display_label(scope: str) -> str:
+    """Return a human-readable Asset Scope label for CLI messages.
+
+    Parameters
+    ----------
+    scope : str
+        ``"local"`` or ``"global"``.
+
+    Returns
+    -------
+    str
+        Scope label including a short parenthetical explanation.
+    """
+    if scope == "global":
+        return "global (user home)"
+    return "local (current repository)"
 
 
 def base_dir(provider: str, scope: str) -> Path:
@@ -300,6 +351,7 @@ def resolve_selection(
     available: list[str],
     interactive: bool,
     kind: str,
+    scope: str,
 ) -> list[str]:
     """Resolve the final list of catalog items to install.
 
@@ -319,6 +371,8 @@ def resolve_selection(
         Whether ``-i``/``--interactive`` was passed.
     kind : str
         Human-readable kind label used in messages (``"skill"`` or ``"rule"``).
+    scope : str
+        Asset Scope (``"local"`` or ``"global"``) shown in the selection prompt.
 
     Returns
     -------
@@ -343,7 +397,10 @@ def resolve_selection(
         logger.abort(
             f"No {kind}s specified. Pass names, --all, or use -i for interactive mode."
         )
-    return logger.checkbox(f"Select {kind}s to add:", available)
+    if not available:
+        return []
+    prompt = f"Select {kind}s to add — {scope_display_label(scope)}:"
+    return logger.checkbox(prompt, available)
 
 
 # ---------------------------------------------------------------------------
@@ -551,9 +608,9 @@ def install_skill(
             force=force,
             backup=backup,
             interactive=interactive,
-            label=f"{provider}: {dest}",
+            label=f"{provider}: {_display_path(dest)}",
         )
-        _record(summary, action, str(dest))
+        _record(summary, action, _display_path(dest))
     return summary
 
 
@@ -601,9 +658,9 @@ def install_rule(
             force=force,
             backup=backup,
             interactive=interactive,
-            label=f"{provider}: {dest}",
+            label=f"{provider}: {_display_path(dest)}",
         )
-        _record(summary, action, str(dest))
+        _record(summary, action, _display_path(dest))
     return summary
 
 
@@ -673,7 +730,7 @@ def install_constitution(
         interactive=interactive,
         label="AGENTS.md",
     )
-    _record(summary, action, str(agents_dest))
+    _record(summary, action, _display_path(agents_dest))
     if action != "skip":
         logger.info(
             "AGENTS.md written (Cursor compatibility; not required by Claude itself)."
@@ -693,7 +750,7 @@ def install_constitution(
             interactive=False,
             label="CLAUDE.md",
         )
-        _record(summary, action, str(claude_dest))
+        _record(summary, action, _display_path(claude_dest))
     else:
         existing = claude_dest.read_text(encoding="utf-8")
         if IMPORT_LINE in existing:
@@ -749,7 +806,7 @@ def _handle_claude_import(
 
     if do_prepend:
         claude_dest.write_text(f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8")
-        summary["written"].append(str(claude_dest) + " (import prepended)")
+        summary["written"].append(_display_path(claude_dest) + " (import prepended)")
 
 
 # ---------------------------------------------------------------------------
@@ -919,4 +976,484 @@ def print_summary(summary: dict[str, list[str]]) -> None:
         for path in skipped:
             logger.warning(f"Skipped (already exists): {path}")
     if not written and not backed_up and not skipped:
+        logger.info("Nothing to do.")
+
+
+# ---------------------------------------------------------------------------
+# Installed asset detection + removal
+# ---------------------------------------------------------------------------
+
+
+def detect_installed_skills(providers: list[str], scope: str) -> list[str]:
+    """Return sorted names of installed Skills for the given Providers and scope.
+
+    Parameters
+    ----------
+    providers : list[str]
+        Target Providers (``"cursor"`` and/or ``"claude"``).
+    scope : str
+        ``"local"`` or ``"global"``.
+
+    Returns
+    -------
+    list[str]
+        Sorted skill names found under any selected Provider.
+    """
+    names: set[str] = set()
+    for provider in providers:
+        skills_dir = base_dir(provider, scope) / "skills"
+        if not skills_dir.is_dir():
+            continue
+        for child in skills_dir.iterdir():
+            if child.is_dir():
+                names.add(child.name)
+    return sorted(names)
+
+
+def asset_search_paths(providers: list[str], scope: str, kind: str) -> list[str]:
+    """Return display paths scanned when detecting installed assets.
+
+    Parameters
+    ----------
+    providers : list[str]
+        Target Providers (``"cursor"`` and/or ``"claude"``).
+    scope : str
+        ``"local"`` or ``"global"``.
+    kind : str
+        Asset kind label (``"skill"`` or ``"rule"``).
+
+    Returns
+    -------
+    list[str]
+        CWD-relative paths to each Provider's skills or rules directory.
+    """
+    subdir = "skills" if kind == "skill" else "rules"
+    return [_display_path(base_dir(provider, scope) / subdir) for provider in providers]
+
+
+def detect_installed_rules(providers: list[str], scope: str) -> list[str]:
+    """Return sorted names of installed Rules for the given Providers and scope.
+
+    Parameters
+    ----------
+    providers : list[str]
+        Target Providers (``"cursor"`` and/or ``"claude"``).
+    scope : str
+        ``"local"`` or ``"global"``.
+
+    Returns
+    -------
+    list[str]
+        Sorted rule names (without extension) found under any selected Provider.
+    """
+    names: set[str] = set()
+    for provider in providers:
+        rules_dir = base_dir(provider, scope) / "rules"
+        if not rules_dir.is_dir():
+            continue
+        suffix = ".mdc" if provider == "cursor" else ".md"
+        for child in rules_dir.iterdir():
+            if child.is_file() and child.name.endswith(suffix):
+                names.add(child.name[: -len(suffix)])
+    return sorted(names)
+
+
+def constitution_paths(
+    providers: list[str], scope: str
+) -> tuple[Path | None, Path | None]:
+    """Return Constitution file paths for the selected Providers and scope.
+
+    Parameters
+    ----------
+    providers : list[str]
+        Target Providers.
+    scope : str
+        ``"local"`` or ``"global"``.
+
+    Returns
+    -------
+    tuple[Path | None, Path | None]
+        ``(agents_path, claude_path)`` where either entry may be ``None`` when
+        not applicable for the selected Provider/scope combination.
+    """
+    if providers == ["cursor"] and scope == "global":
+        return None, None
+
+    if scope == "local":
+        agents_path = Path.cwd() / "AGENTS.md"
+        claude_path = Path.cwd() / "CLAUDE.md" if "claude" in providers else None
+        return agents_path, claude_path
+
+    agents_path = Path.home() / ".claude" / "AGENTS.md"
+    claude_path = (
+        Path.home() / ".claude" / "CLAUDE.md" if "claude" in providers else None
+    )
+    return agents_path, claude_path
+
+
+def resolve_remove_selection(
+    names: list[str],
+    detected: list[str],
+    interactive: bool,
+    kind: str,
+    providers: list[str],
+    scope: str,
+) -> list[str]:
+    """Resolve which installed asset names to consider for removal.
+
+    Follows the same Input Precedence as :func:`resolve_selection`: explicit
+    names win; otherwise an interactive checkbox is shown on a TTY (or the
+    command aborts when stdin is not a tty).
+
+    Parameters
+    ----------
+    names : list[str]
+        Explicit names from the CLI.
+    detected : list[str]
+        Names detected on disk for the selected Providers and scope.
+    interactive : bool
+        Whether ``-i``/``--interactive`` was passed.
+    kind : str
+        Human-readable kind label (``"skill"`` or ``"rule"``).
+    providers : list[str]
+        Target Providers used for search-path disclosure in abort messages.
+    scope : str
+        Asset Scope (``"local"`` or ``"global"``) for search-path disclosure.
+
+    Returns
+    -------
+    list[str]
+        Asset names to evaluate for removal (may be empty).
+    """
+    search_paths = asset_search_paths(providers, scope, kind)
+    searching = ", ".join(search_paths)
+    scope_label = scope_display_label(scope)
+
+    if names:
+        missing = [n for n in names if n not in detected]
+        if missing:
+            logger.abort(
+                f"No installed {kind}(s) found: {missing}. "
+                f"Scope: {scope_label}. "
+                f"Searching: {searching}. "
+                f"Detected: {detected or '(none)'}"
+            )
+        return list(names)
+
+    if not sys.stdin.isatty():
+        if interactive:
+            logger.abort("Interactive selection requires a terminal (no TTY).")
+        logger.abort(
+            f"No {kind}s specified. Pass names to remove, or use -i for "
+            f"interactive mode.\n"
+            f"Scope: {scope_label}\n"
+            f"Searching: {searching}\n"
+            f"Detected: {detected or '(none)'}"
+        )
+    if not detected:
+        logger.info(
+            f"No installed {kind}s found.\n"
+            f"Scope: {scope_label}\n"
+            f"Searching: {searching}"
+        )
+        return []
+    prompt = f"Select {kind}s to remove — {scope_label}:"
+    return logger.checkbox(prompt, detected)
+
+
+def collect_confirmed_removals(
+    candidates: list[tuple[str, Path]],
+) -> tuple[list[Path], list[str]]:
+    """Confirm each removal candidate before any Mutation.
+
+    Parameters
+    ----------
+    candidates : list[tuple[str, Path]]
+        ``(display_label, path)`` pairs proposed for removal.
+
+    Returns
+    -------
+    tuple[list[Path], list[str]]
+        Confirmed paths and skipped display labels.
+    """
+    confirmed: list[Path] = []
+    skipped: list[str] = []
+    for label, path in candidates:
+        if logger.confirm(f"Remove {label}?"):
+            confirmed.append(path)
+        else:
+            skipped.append(label)
+    return confirmed, skipped
+
+
+def _catalog_agents_md_contents() -> set[str]:
+    """Return the exact ``AGENTS.md`` contents of every bundled Constitution."""
+    contents: set[str] = set()
+    for name in available_constitutions():
+        src = Path(str(CONSTITUTIONS_DIR / name / "AGENTS.md"))
+        contents.add(src.read_text(encoding="utf-8"))
+    return contents
+
+
+def _claude_md_is_import_stub(content: str) -> bool:
+    """Return whether *content* is only the ``@AGENTS.md`` import stub."""
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    return lines == [IMPORT_LINE]
+
+
+def _strip_agents_import(content: str) -> str:
+    """Remove ``@AGENTS.md`` import lines from *content*, preserving the rest."""
+    kept = [line for line in content.splitlines() if line.strip() != IMPORT_LINE]
+    return "\n".join(kept).strip("\n")
+
+
+def remove_path(path: Path, *, backup: bool = False) -> str:
+    """Remove a file or directory, optionally backing it up first.
+
+    Parameters
+    ----------
+    path : Path
+        Path to remove.
+    backup : bool, optional
+        When ``True``, rename to ``<name>.bak`` before deletion.
+
+    Returns
+    -------
+    str
+        ``"removed"`` or ``"backed_up"``.
+    """
+    if backup:
+        _apply_backup(path)
+        return "backed_up"
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+    return "removed"
+
+
+def _record_removal(summary: dict[str, list[str]], action: str, path: str) -> None:
+    """Record a removal action in the summary dict."""
+    if action == "removed":
+        summary["removed"].append(path)
+    elif action == "backed_up":
+        summary["backed_up"].append(path)
+    elif action == "skipped":
+        summary["skipped"].append(path)
+
+
+def remove_skill(
+    name: str,
+    providers: list[str],
+    scope: str,
+    *,
+    backup: bool = False,
+) -> dict[str, list[str]]:
+    """Remove a single skill for every requested Provider (paths pre-confirmed).
+
+    Parameters
+    ----------
+    name : str
+        Skill name.
+    providers : list[str]
+        Target Providers.
+    scope : str
+        ``"local"`` or ``"global"``.
+    backup : bool, optional
+        Back up before removing.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
+    """
+    summary: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
+    for provider in providers:
+        dest = skill_target(provider, scope, name)
+        if not dest.exists():
+            continue
+        action = remove_path(dest, backup=backup)
+        _record_removal(summary, action, _display_path(dest))
+    return summary
+
+
+def remove_rule(
+    name: str,
+    providers: list[str],
+    scope: str,
+    *,
+    backup: bool = False,
+) -> dict[str, list[str]]:
+    """Remove a single rule for every requested Provider (paths pre-confirmed).
+
+    Parameters
+    ----------
+    name : str
+        Rule name (without extension).
+    providers : list[str]
+        Target Providers.
+    scope : str
+        ``"local"`` or ``"global"``.
+    backup : bool, optional
+        Back up before removing.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
+    """
+    summary: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
+    for provider in providers:
+        dest = rule_target(provider, scope, name)
+        if not dest.exists():
+            continue
+        action = remove_path(dest, backup=backup)
+        _record_removal(summary, action, _display_path(dest))
+    return summary
+
+
+def remove_constitution_file(
+    path: Path,
+    *,
+    force: bool = False,
+    backup: bool = False,
+) -> tuple[str, str]:
+    """Apply conservative removal logic to a Constitution file.
+
+    Parameters
+    ----------
+    path : Path
+        ``AGENTS.md`` or ``CLAUDE.md`` path (must exist; caller confirms first).
+    force : bool, optional
+        Allow removing user-authored content after confirmation.
+    backup : bool, optional
+        Back up before whole-file removal or partial rewrite.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(action, display_path)`` where *action* is ``"removed"``, ``"backed_up"``,
+        ``"modified"``, or ``"skipped"``.
+    """
+    display = _display_path(path)
+    content = path.read_text(encoding="utf-8")
+
+    if path.name == "AGENTS.md":
+        if content not in _catalog_agents_md_contents() and not force:
+            return "skipped", display
+        if backup:
+            _apply_backup(path)
+            return "backed_up", display
+        path.unlink()
+        return "removed", display
+
+    # CLAUDE.md
+    if IMPORT_LINE not in content:
+        if not force:
+            return "skipped", display
+        if backup:
+            _apply_backup(path)
+            return "backed_up", display
+        path.unlink()
+        return "removed", display
+
+    if _claude_md_is_import_stub(content):
+        if backup:
+            _apply_backup(path)
+            return "backed_up", display
+        path.unlink()
+        return "removed", display
+
+    new_content = _strip_agents_import(content)
+    if backup:
+        _apply_backup(path)
+    path.write_text(new_content + ("\n" if new_content else ""), encoding="utf-8")
+    return "modified", display + " (import removed)"
+
+
+def remove_constitution(
+    providers: list[str],
+    scope: str,
+    *,
+    force: bool = False,
+    backup: bool = False,
+    confirmed_agents: bool = False,
+    confirmed_claude: bool = False,
+) -> dict[str, list[str]]:
+    """Remove Constitution files confirmed during the Prompt Collection Phase.
+
+    Parameters
+    ----------
+    providers : list[str]
+        Target Providers.
+    scope : str
+        ``"local"`` or ``"global"``.
+    force : bool, optional
+        Allow removing non-catalog/user-authored Constitution content.
+    backup : bool, optional
+        Back up before removing or rewriting files.
+    confirmed_agents : bool, optional
+        Whether the user confirmed ``AGENTS.md`` removal.
+    confirmed_claude : bool, optional
+        Whether the user confirmed ``CLAUDE.md`` removal/modification.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
+    """
+    summary: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
+
+    if providers == ["cursor"] and scope == "global":
+        logger.warning(
+            "Constitution is project-scoped for Cursor; nothing to do globally. "
+            "Tip: use --local (default) or --claude to target Claude's global ~/.claude/."
+        )
+        return summary
+
+    agents_path, claude_path = constitution_paths(providers, scope)
+
+    if confirmed_agents and agents_path and agents_path.exists():
+        action, display = remove_constitution_file(
+            agents_path, force=force, backup=backup
+        )
+        if action == "modified":
+            summary["removed"].append(display)
+        else:
+            _record_removal(summary, action, display)
+
+    if confirmed_claude and claude_path and claude_path.exists():
+        action, display = remove_constitution_file(
+            claude_path, force=force, backup=backup
+        )
+        if action == "modified":
+            summary["removed"].append(display)
+        else:
+            _record_removal(summary, action, display)
+
+    return summary
+
+
+def print_removal_summary(summary: dict[str, list[str]]) -> None:
+    """Print a Rich removal summary.
+
+    Parameters
+    ----------
+    summary : dict[str, list[str]]
+        ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
+    """
+    removed = summary.get("removed", [])
+    skipped = summary.get("skipped", [])
+    backed_up = summary.get("backed_up", [])
+
+    if removed:
+        for path in removed:
+            logger.success(f"Removed: {path}")
+    if backed_up:
+        for path in backed_up:
+            logger.info(f"Backed up + removed: {path}")
+    if skipped:
+        for path in skipped:
+            logger.warning(f"Skipped: {path}")
+    if not removed and not backed_up and not skipped:
         logger.info("Nothing to do.")

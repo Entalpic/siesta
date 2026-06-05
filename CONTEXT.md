@@ -56,6 +56,10 @@ _Avoid_: template, plugin, config
 The collection of Agent Assets bundled inside the siesta package, used as the only install source.
 _Avoid_: registry, store, remote assets
 
+**Detected Agent Asset**:
+An Agent Asset already present on disk under a Provider directory for a given Asset Scope — the set `siesta agents remove` operates on.
+_Avoid_: available (that term is reserved for the Catalog on `add` commands)
+
 **Provider**:
 A target agent tool whose on-disk conventions siesta installs into — Cursor or Claude.
 _Avoid_: vendor, tool, platform, client
@@ -111,7 +115,7 @@ The rule that branch commits and PR context use `Refs #<num>` for linkage, while
 ## Relationships
 
 - An **Agent Asset Catalog** contains **Skills**, **Rules**, and **Constitutions**; it is the only install source (bundled, no network).
-- The **Quickstart Config** selects a subset of the **Agent Asset Catalog**; running `siesta agents quickstart` is equivalent to running the individual `add-*` commands for each listed asset.
+- The **Quickstart Config** selects a subset of the **Agent Asset Catalog**; running `siesta agents quickstart` is equivalent to running the individual `agents add` commands for each listed asset.
 - A **Constitution** is rendered as `AGENTS.md` (source of truth) plus, for the Claude **Provider**, a `CLAUDE.md` `@AGENTS.md` stub.
 - A **Rule** has exactly one canonical `.mdc` source and is **Provider Mirrored** to a translated Claude `.md`.
 - Every Agent Asset install resolves to a **Provider** × **Asset Scope** destination.
@@ -119,7 +123,7 @@ The rule that branch commits and PR context use `Refs #<num>` for linkage, while
 
 ## Example dialogue
 
-> **Dev:** "When I run `add-constitution --claude`, does it only write `CLAUDE.md`?"
+> **Dev:** "When I run `agents add constitution --claude`, does it only write `CLAUDE.md`?"
 > **Maintainer:** "No — a **Constitution**'s source of truth is `AGENTS.md`, so we always write it; `CLAUDE.md` is just the `@AGENTS.md` stub. `AGENTS.md` is there for Cursor compatibility, not because Claude needs it."
 > **Dev:** "And the **Rules**?"
 > **Maintainer:** "Each is authored once as `.mdc`. The Claude copy is **Provider Mirrored** — same intent, vendor-translated frontmatter."
