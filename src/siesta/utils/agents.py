@@ -1152,9 +1152,7 @@ def resolve_remove_selection(
         )
     if not detected:
         logger.info(
-            f"No installed {kind}s found.\n"
-            f"Scope: {scope_label}\n"
-            f"Searching: {searching}"
+            f"No installed {kind}s found.\nScope: {scope_label}\nSearching: {searching}"
         )
         return []
     prompt = f"Select {kind}s to remove — {scope_label}:"

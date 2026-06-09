@@ -378,7 +378,12 @@ def remove_skill_cmd(
     providers = resolve_providers(cursor, claude, both)
     detected = detect_installed_skills(providers, scope)
     selected = resolve_remove_selection(
-        list(names), detected, interactive, kind="skill", providers=providers, scope=scope
+        list(names),
+        detected,
+        interactive,
+        kind="skill",
+        providers=providers,
+        scope=scope,
     )
     if not selected:
         if detected:
@@ -458,7 +463,12 @@ def remove_rule_cmd(
     providers = resolve_providers(cursor, claude, both)
     detected = detect_installed_rules(providers, scope)
     selected = resolve_remove_selection(
-        list(names), detected, interactive, kind="rule", providers=providers, scope=scope
+        list(names),
+        detected,
+        interactive,
+        kind="rule",
+        providers=providers,
+        scope=scope,
     )
     if not selected:
         if detected:

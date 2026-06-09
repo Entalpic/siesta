@@ -38,8 +38,8 @@ from siesta.utils.agents import (
     resolve_remove_selection,
     resolve_scope,
     resolve_selection,
-    scope_display_label,
     rule_target,
+    scope_display_label,
     skill_target,
     write_dir,
     write_file,
@@ -736,9 +736,7 @@ class TestResolveRemoveSelection:
 
         monkeypatch.setattr(logger, "info", lambda msg: messages.append(msg))
         monkeypatch.setattr(logger, "checkbox", fail_checkbox)
-        result = resolve_remove_selection(
-            [], [], False, "skill", ["cursor"], "local"
-        )
+        result = resolve_remove_selection([], [], False, "skill", ["cursor"], "local")
         assert result == []
         assert len(messages) == 1
         assert "No installed skills found." in messages[0]

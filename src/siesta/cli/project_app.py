@@ -90,7 +90,9 @@ def _resolve_conflict(
     """
     if overwrite is True:
         if not allow_overwrite:
-            logger.warning(f"{name} already exists. Overwrite not supported for this step — skipping.")
+            logger.warning(
+                f"{name} already exists. Overwrite not supported for this step — skipping."
+            )
             return False
         return True
     if overwrite is False:
