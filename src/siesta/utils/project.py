@@ -161,7 +161,26 @@ def write_tests_infra(project_name: str) -> None:
     (tests_dir / "test_import.py").write_text(test_example)
 
 
-def add_ipdb_as_debugger():
+_IPDB_BLOCK = dedent(
+    """
+
+    try:
+        import os
+
+        import ipdb  # noqa: F401
+
+        # set ipdb as default debugger when calling `breakpoint()`
+        os.environ["PYTHONBREAKPOINT"] = "ipdb.set_trace"
+    except ImportError:
+        print(
+            "`ipdb` not available.",
+            "Consider adding it to your dev stack for a smoother debugging experience.",
+        )
+    """
+)
+
+
+def add_ipdb_as_debugger(overwrite: bool = False) -> None:
     """Set ``ipdb`` as default debugger to the project.
 
     This will set ``ipdb`` as default debugger when calling ``breakpoint()`` by setting the
@@ -176,26 +195,17 @@ def add_ipdb_as_debugger():
         [(i, len(str(i).split("/"))) for i in inits], key=lambda x: x[1]
     )[0][0]
 
-    first_init.write_text(
-        first_init.read_text()
-        + dedent(
-            """
+    existing = first_init.read_text()
+    if "PYTHONBREAKPOINT" in existing:
+        if not overwrite:
+            logger.warning("ipdb already configured. Skipping.")
+            return
+        # Remove the siesta-added block before re-appending.
+        # If the user has their own PYTHONBREAKPOINT setup (_IPDB_BLOCK not found), append anyway.
+        if _IPDB_BLOCK in existing:
+            existing = existing.replace(_IPDB_BLOCK, "")
 
-            try:
-                import os
-
-                import ipdb  # noqa: F401
-
-                # set ipdb as default debugger when calling `breakpoint()`
-                os.environ["PYTHONBREAKPOINT"] = "ipdb.set_trace"
-            except ImportError:
-                print(
-                    "`ipdb` not available.",
-                    "Consider adding it to your dev stack for a smoother debugging experience.",
-                )
-            """
-        )
-    )
+    first_init.write_text(existing + _IPDB_BLOCK)
 
 
 def download_python_gitignore() -> str:
@@ -207,9 +217,12 @@ def download_python_gitignore() -> str:
     return response.text
 
 
-def write_gitignore() -> None:
+def write_gitignore(overwrite: bool = False) -> None:
     """Write the gitignore file to the ``.gitignore`` file."""
     gitignore_path = Path(".gitignore")
+    if gitignore_path.exists() and not overwrite:
+        logger.warning(".gitignore already exists. Skipping.")
+        return
     python_gitignore = "\n".join(
         line.rstrip() for line in download_python_gitignore().splitlines()
     )

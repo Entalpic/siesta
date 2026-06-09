@@ -38,6 +38,17 @@ A valid outcome where the user selects no actions and the command exits successf
 User interruption during prompt collection that exits with code 130 at the CLI entrypoint, before any Mutation.
 _Avoid_: abort, quit
 
+**Conflict**:
+An existing artifact on disk that a Mutation would overwrite or corrupt if run unconditionally.
+
+**Conflict Resolution**:
+The sub-process within the Prompt Collection Phase where each detected Conflict is surfaced to the user, who declares skip, overwrite, or abort. All Conflict Resolutions are collected before the first Mutation — guaranteeing that Abort leaves the project state identical to its pre-run state.
+_Avoid_: guard, check, validation (those are Validation Phase terms)
+
+**Abort**:
+A deliberate user choice during Conflict Resolution that exits before any Mutation, leaving project state identical to its pre-run state. Distinguished from Cancellation (which is an unintentional interrupt, exit code 130) and from error exits triggered by the CLI itself.
+_Avoid_: cancel, quit
+
 ### CLI structure
 
 **CLI Domain Module**:

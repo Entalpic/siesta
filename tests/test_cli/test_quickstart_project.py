@@ -190,11 +190,11 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
     monkeypatch.setattr(
         cli, "write_or_update_pre_commit_file", lambda: events.append("precommit_file")
     )
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: events.append("ipdb"))
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda overwrite=False: events.append("ipdb"))
     monkeypatch.setattr(
         cli, "setup_tests", lambda **_kwargs: events.append("setup_tests")
     )
-    monkeypatch.setattr(cli, "write_gitignore", lambda: events.append("gitignore"))
+    monkeypatch.setattr(cli, "write_gitignore", lambda overwrite=False: events.append("gitignore"))
     monkeypatch.setattr(
         "siesta.cli.docs_app.init_docs",
         lambda **_kwargs: events.append("init_docs"),
@@ -248,9 +248,9 @@ def test_quickstart_interactive_recommends_cli_defaults(tmp_path_chdir, monkeypa
     monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
     monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
-    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
 
     try:
@@ -283,9 +283,9 @@ def test_quickstart_interactive_recommends_dev_docs_deps(tmp_path_chdir, monkeyp
     monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
     monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
-    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda overwrite=False: None)
     monkeypatch.setattr(
         "siesta.cli.docs_app.init_docs",
         lambda **_kwargs: None,
@@ -396,9 +396,9 @@ def test_quickstart_fresh_project_delegates_docs_uv_detection(
     monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
     monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
-    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda overwrite=False: None)
     monkeypatch.setattr(
         "siesta.cli.docs_app.init_docs",
         lambda **kwargs: init_docs_kwargs.update(kwargs),
