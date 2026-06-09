@@ -1,6 +1,6 @@
 ---
 name: github-issue-workflow
-description: "`gh` mechanics for the `agent:todo` issue lifecycle defined in this repo's AGENTS.md: identify TODO issues via the `agent:todo` label, claim with mutually-exclusive status labels, maintain a single managed plan comment per issue, and transition state atomically. Use whenever the user asks to claim, scout, plan, build, sync, publish, or close agent-actionable GitHub issues."
+description: "`gh` mechanics for the `agent:todo` issue lifecycle defined in this repo's AGENTS.md: identify TODO issues via the `agent:todo` label, claim with mutually-exclusive status labels, maintain a single managed plan comment per issue, and transition state atomically. Use whenever the user asks to claim, scout, plan, build, sync, publish, or close agent-actionable GitHub issues or create a todo item on Github or a todo issue or create a new issue."
 ---
 
 # GitHub Issue Workflow
