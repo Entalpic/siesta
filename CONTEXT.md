@@ -39,7 +39,7 @@ User interruption during prompt collection that exits with code 130 at the CLI e
 _Avoid_: abort, quit
 
 **Conflict**:
-An existing artifact on disk that a Mutation would overwrite or corrupt if run unconditionally.
+An artifact that existed on disk _before the run started_ and that a Mutation would overwrite or corrupt if run unconditionally. Scope is pre-run: an artifact a prior Mutation produced within the same run (for example the `.gitignore` that `uv init` writes during `quickstart`) is not a Conflict — it is a byproduct of the pipeline, and a later step that owns that artifact may overwrite it freely.
 
 **Conflict Resolution**:
 The sub-process within the Prompt Collection Phase where each detected Conflict is surfaced to the user, who declares skip, overwrite, or abort. All Conflict Resolutions are collected before the first Mutation — guaranteeing that Abort leaves the project state identical to its pre-run state.
