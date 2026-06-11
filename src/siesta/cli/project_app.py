@@ -331,7 +331,11 @@ def quickstart_project(
             "Would you like to initialize the ``.gitignore`` file?", "gitignore"
         )
     gitignore_overwrite = False
-    if gitignore and Path(".gitignore").exists():
+    # Capture pre-run existence: only a .gitignore present before any Mutation is a
+    # Conflict. The one `uv init` writes during the Execution Phase is a pipeline
+    # byproduct, so siesta's gitignore takes precedence over it (see CONTEXT.md).
+    gitignore_preexisted = Path(".gitignore").exists()
+    if gitignore and gitignore_preexisted:
         result = _resolve_conflict(".gitignore", overwrite)
         if not result:
             gitignore = False
@@ -455,7 +459,9 @@ def quickstart_project(
         logger.info("Test actions config written.")
 
     if gitignore:
-        write_gitignore(overwrite=gitignore_overwrite)
+        # Overwrite when the file was not a pre-run Conflict: any .gitignore on disk
+        # now was written by `uv init` this run, and siesta's takes precedence.
+        write_gitignore(overwrite=gitignore_overwrite or not gitignore_preexisted)
         logger.info("Gitignore written.")
 
     if docs:

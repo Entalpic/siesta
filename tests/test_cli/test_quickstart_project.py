@@ -509,6 +509,77 @@ def test_quickstart_no_uv_init_on_fresh_project_warns(
     assert "Skipping uv init on a fresh directory" in output.getvalue()
 
 
+def test_quickstart_gitignore_takes_precedence_over_uv_init(
+    tmp_path_chdir, monkeypatch
+):
+    """A fresh quickstart overwrites the .gitignore that uv init writes mid-run.
+
+    The file does not pre-exist the run, so it is not a Conflict — siesta's
+    .gitignore takes precedence and write_gitignore is called with overwrite=True.
+    """
+    overwrites: list[bool] = []
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        cli, "write_gitignore", lambda overwrite=False: overwrites.append(overwrite)
+    )
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    try:
+        app(
+            [
+                "project",
+                "quickstart",
+                "--no-deps",
+                "--no-precommit",
+                "--no-tests",
+                "--no-actions",
+                "--no-docs",
+                "--no-agents",
+            ]
+        )
+    except SystemExit as e:
+        assert e.code == 0
+
+    assert overwrites == [True]
+
+
+def test_quickstart_preexisting_gitignore_is_a_conflict(
+    tmp_path_chdir, monkeypatch, capture_output
+):
+    """A .gitignore present before the run is a Conflict; --no-overwrite skips it."""
+    (tmp_path_chdir / ".gitignore").write_text("# user's own\n")
+    monkeypatch.setattr("sys.stdin", io.StringIO())
+    called: list[bool] = []
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        cli, "write_gitignore", lambda overwrite=False: called.append(overwrite)
+    )
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    with capture_output():
+        try:
+            app(
+                [
+                    "project",
+                    "quickstart",
+                    "--no-overwrite",
+                    "--no-deps",
+                    "--no-precommit",
+                    "--no-tests",
+                    "--no-actions",
+                    "--no-docs",
+                    "--no-agents",
+                ]
+            )
+        except SystemExit as e:
+            assert e.code == 0
+
+    # Pre-run Conflict + --no-overwrite => the existing file is kept, no write.
+    assert called == []
+
+
 def test_quickstart_respects_no_agents(tmp_path_chdir, capture_output):
     """--no-agents skips the agent assets step."""
     with capture_output():
