@@ -16,11 +16,15 @@ BRANCH = "│   "
 TEE = "├── "
 LAST = "└── "
 TREE_LABELS = {
+    ".claude/": "Claude agent assets: skills and rules.",
+    ".cursor/": "Cursor agent assets — same structure as .claude/.",
     ".git/": "Contains the git data repository for your project. Do NOT touch this folder.",
     ".github/": "Contains the GitHub Actions workflows for your project.",
     ".gitignore": "Specifies files and directories that should be ignored by git.",
     ".pre-commit-config.yaml": "Contains the 'hooks', i.e. routines, that are executed before each commit.",
     ".readthedocs.yaml": "Config file to deploy your docs to ReadTheDocs (ask Victor).",
+    "AGENTS.md": "Always-loaded instructions for AI coding agents; the source of truth.",
+    "CLAUDE.md": "Claude's entry point — imports AGENTS.md (keep edits in AGENTS.md).",
     "docs/": "Contains the documentation for your project.",
     "docs/source/": "Contains the documentation's source code that will be rendered by Sphinx.",
     "docs/source/conf.py": "Configures your Sphinx-based documentation.",

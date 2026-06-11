@@ -145,3 +145,13 @@ def test_label_tree():
         ),
         split_new_lines=True,
     )
+
+
+def test_agent_asset_labels_present():
+    """Agent asset files/dirs installed by quickstart are labeled in the tree."""
+    for key in ("AGENTS.md", "CLAUDE.md", ".claude/", ".cursor/"):
+        assert key in TREE_LABELS
+    # CLAUDE.md points back to AGENTS.md (the Constitution's source of truth).
+    assert "AGENTS.md" in TREE_LABELS["CLAUDE.md"]
+    # .cursor/ defers to .claude/ rather than duplicating its description.
+    assert ".claude/" in TREE_LABELS[".cursor/"]
