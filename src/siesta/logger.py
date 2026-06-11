@@ -152,8 +152,8 @@ class Logger(BaseLogger):
         return datetime.now().strftime("%H:%M:%S")
 
     @property
-    def prefix(self):
-        """Get the prefix for the log messages.
+    def prefix_text(self) -> str:
+        """Get the unstyled prefix text.
 
         The prefix includes the name of the logger and the current time.
 
@@ -169,8 +169,34 @@ class Logger(BaseLogger):
                 prefix += f" | {self.now()}"
         else:
             prefix += self.now()
+        return prefix
+
+    @property
+    def prefix(self) -> str:
+        """Get the Rich-formatted prefix for log messages.
+
+        Returns
+        -------
+        str
+            The Rich-formatted prefix.
+        """
+        prefix = self.prefix_text
         if prefix:
             return rf"[grey50 bold]\[{prefix}][/grey50 bold] "
+        return prefix
+
+    @property
+    def questionary_prefix(self) -> str:
+        """Get the plain-text prefix for questionary prompts.
+
+        Returns
+        -------
+        str
+            The plain-text prefix.
+        """
+        prefix = self.prefix_text
+        if prefix:
+            return f"[{prefix}] "
         return prefix
 
     def prompt(self, message: str, default: str | None = None) -> str:
@@ -194,7 +220,7 @@ class Logger(BaseLogger):
             If the prompt is cancelled (for example with Ctrl+C).
         """
         response = questionary.text(
-            f"{self.prefix}{message}",
+            f"{self.questionary_prefix}{message}",
             default=default if default is not None else "",
         ).ask()
         if response is None:
@@ -222,7 +248,7 @@ class Logger(BaseLogger):
             If the prompt is cancelled (for example with Ctrl+C).
         """
         response = questionary.confirm(
-            f"{self.prefix}{message}",
+            f"{self.questionary_prefix}{message}",
             default=default,
         ).ask()
         if response is None:
@@ -249,8 +275,10 @@ class Logger(BaseLogger):
         KeyboardInterrupt
             If the prompt is cancelled (for example with Ctrl+C).
         """
+        if not choices:
+            return []
         response = questionary.checkbox(
-            f"{self.prefix}{message}", choices=choices
+            f"{self.questionary_prefix}{message}", choices=choices
         ).ask()
         if response is None:
             raise KeyboardInterrupt()
@@ -276,7 +304,9 @@ class Logger(BaseLogger):
         KeyboardInterrupt
             If the prompt is cancelled (for example with Ctrl+C).
         """
-        response = questionary.select(f"{self.prefix}{message}", choices=choices).ask()
+        response = questionary.select(
+            f"{self.questionary_prefix}{message}", choices=choices
+        ).ask()
         if response is None:
             raise KeyboardInterrupt()
         return response

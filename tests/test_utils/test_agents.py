@@ -11,26 +11,40 @@ import pytest
 from siesta.utils.agents import (
     DEFAULT_CONSTITUTION,
     IMPORT_LINE,
+    _display_path,
     _split_frontmatter,
     _split_globs,
+    asset_search_paths,
     available_constitutions,
     available_rules,
     available_skills,
     base_dir,
+    collect_confirmed_removals,
+    constitution_paths,
+    detect_installed_rules,
+    detect_installed_skills,
     install_constitution,
     install_quickstart,
     install_rule,
     install_skill,
     load_quickstart,
     mdc_to_claude,
+    remove_constitution,
+    remove_constitution_file,
+    remove_path,
+    remove_rule,
+    remove_skill,
     resolve_providers,
+    resolve_remove_selection,
     resolve_scope,
     resolve_selection,
     rule_target,
+    scope_display_label,
     skill_target,
     write_dir,
     write_file,
 )
+from siesta.utils.common import logger
 
 # ---------------------------------------------------------------------------
 # Catalog discovery
@@ -121,6 +135,22 @@ class TestBaseDir:
 
 
 class TestTargetPaths:
+    def test_display_path_is_relative_to_cwd(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        dest = tmp_path / ".cursor" / "rules" / "python-docstrings.mdc"
+        assert _display_path(dest) == str(
+            Path(".cursor") / "rules" / "python-docstrings.mdc"
+        )
+
+    def test_display_path_walks_up_to_paths_outside_cwd(self, tmp_path, monkeypatch):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        monkeypatch.chdir(repo)
+        dest = tmp_path / ".claude" / "skills" / "grill-with-docs"
+        assert _display_path(dest) == str(
+            Path("..") / ".claude" / "skills" / "grill-with-docs"
+        )
+
     def test_skill_target_cursor_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         dest = skill_target("cursor", "local", "grill-with-docs")
@@ -266,32 +296,45 @@ class TestResolveSelection:
             ["python-docstrings", "mirror-providers"],
             False,
             "rule",
+            "local",
         )
         assert result == ["python-docstrings"]
 
     def test_all_flag_returns_all(self):
         available = ["a", "b", "c"]
-        result = resolve_selection([], True, available, False, "rule")
+        result = resolve_selection([], True, available, False, "rule", "local")
         assert result == available
 
     def test_names_and_all_aborts(self):
         with pytest.raises(SystemExit):
-            resolve_selection(["a"], True, ["a", "b"], False, "rule")
+            resolve_selection(["a"], True, ["a", "b"], False, "rule", "local")
 
     def test_unknown_name_aborts(self):
         with pytest.raises(SystemExit):
-            resolve_selection(["unknown"], False, ["a", "b"], False, "rule")
+            resolve_selection(["unknown"], False, ["a", "b"], False, "rule", "local")
 
     def test_non_interactive_no_stdin_aborts(self, monkeypatch):
         monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
         with pytest.raises(SystemExit):
-            resolve_selection([], False, ["a"], False, "rule")
+            resolve_selection([], False, ["a"], False, "rule", "local")
 
     def test_interactive_without_tty_aborts(self, monkeypatch):
         # Explicit -i with no terminal must abort, not fall through to a prompt.
         monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
         with pytest.raises(SystemExit):
-            resolve_selection([], False, ["a"], True, "rule")
+            resolve_selection([], False, ["a"], True, "rule", "local")
+
+    def test_checkbox_prompt_includes_scope(self, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        prompts: list[str] = []
+
+        def capture_checkbox(message: str, choices: list[str]) -> list[str]:
+            prompts.append(message)
+            return choices
+
+        monkeypatch.setattr(logger, "checkbox", capture_checkbox)
+        resolve_selection([], False, ["a-skill"], False, "skill", "global")
+        assert prompts == ["Select skills to add — global (user home):"]
 
 
 # ---------------------------------------------------------------------------
@@ -389,7 +432,10 @@ class TestInstallSkill:
     def test_installs_for_both_providers(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         summary = install_skill("grill-with-docs", ["cursor", "claude"], "local")
-        assert len(summary["written"]) == 2
+        assert summary["written"] == [
+            str(Path(".cursor") / "skills" / "grill-with-docs"),
+            str(Path(".claude") / "skills" / "grill-with-docs"),
+        ]
         assert (
             tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
         ).exists()
@@ -403,7 +449,7 @@ class TestInstallSkill:
         dest.mkdir(parents=True)
         (dest / "SKILL.md").write_text("existing")
         summary = install_skill("grill-with-docs", ["cursor"], "local")
-        assert str(dest) in summary["skipped"]
+        assert str(Path(".cursor") / "skills" / "grill-with-docs") in summary["skipped"]
         assert (dest / "SKILL.md").read_text() == "existing"
 
 
@@ -418,7 +464,9 @@ class TestInstallRule:
         summary = install_rule("python-docstrings", ["cursor"], "local")
         dest = tmp_path / ".cursor" / "rules" / "python-docstrings.mdc"
         assert dest.exists()
-        assert len(summary["written"]) == 1
+        assert summary["written"] == [
+            str(Path(".cursor") / "rules" / "python-docstrings.mdc")
+        ]
         content = dest.read_text()
         assert "alwaysApply" in content
 
@@ -452,10 +500,13 @@ class TestInstallRule:
 class TestInstallConstitution:
     def test_both_providers_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_constitution(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")
+        summary = install_constitution(
+            DEFAULT_CONSTITUTION, ["cursor", "claude"], "local"
+        )
         assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "CLAUDE.md").exists()
         assert (tmp_path / "CLAUDE.md").read_text().strip() == IMPORT_LINE
+        assert summary["written"] == ["AGENTS.md", "CLAUDE.md"]
 
     def test_cursor_only_writes_agents_md(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -519,12 +570,13 @@ class TestInstallConstitution:
     ):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "CLAUDE.md").write_text("existing content")
-        install_constitution(
+        summary = install_constitution(
             DEFAULT_CONSTITUTION, ["claude"], "local", force=True, interactive=False
         )
         content = (tmp_path / "CLAUDE.md").read_text()
         assert content.startswith(IMPORT_LINE)
         assert "existing content" in content
+        assert "CLAUDE.md (import prepended)" in summary["written"]
 
     def test_agents_md_backed_up_with_backup_flag(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -569,3 +621,258 @@ class TestInstallQuickstart:
         )
         with pytest.raises(SystemExit):
             install_quickstart(["cursor"], "local")
+
+
+# ---------------------------------------------------------------------------
+# Detection + removal helpers
+# ---------------------------------------------------------------------------
+
+
+class TestDetectInstalled:
+    def test_detects_non_catalog_skill(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        custom = tmp_path / ".cursor" / "skills" / "custom-skill"
+        custom.mkdir(parents=True)
+        assert detect_installed_skills(["cursor"], "local") == ["custom-skill"]
+
+    def test_detects_non_catalog_rule(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        rules = tmp_path / ".claude" / "rules"
+        rules.mkdir(parents=True)
+        (rules / "custom-rule.md").write_text("# rule")
+        assert detect_installed_rules(["claude"], "local") == ["custom-rule"]
+
+    def test_returns_sorted_names(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        for name in ("z-skill", "a-skill"):
+            (tmp_path / ".cursor" / "skills" / name).mkdir(parents=True)
+        assert detect_installed_skills(["cursor"], "local") == ["a-skill", "z-skill"]
+
+
+class TestScopeDisplayLabel:
+    def test_local(self):
+        assert scope_display_label("local") == "local (current repository)"
+
+    def test_global(self):
+        assert scope_display_label("global") == "global (user home)"
+
+
+class TestAssetSearchPaths:
+    def test_local_cursor_skill_path(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert asset_search_paths(["cursor"], "local", "skill") == [
+            str(Path(".cursor") / "skills")
+        ]
+
+    def test_global_both_providers(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.chdir(tmp_path)
+        paths = asset_search_paths(["cursor", "claude"], "global", "rule")
+        assert paths == [
+            str(Path(".cursor") / "rules"),
+            str(Path(".claude") / "rules"),
+        ]
+
+
+class TestResolveRemoveSelection:
+    def test_explicit_missing_name_aborts(self, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        with pytest.raises(SystemExit):
+            resolve_remove_selection(
+                ["missing"],
+                ["installed"],
+                False,
+                "skill",
+                ["cursor"],
+                "local",
+            )
+
+    def test_non_interactive_no_stdin_aborts(self, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        messages: list[str] = []
+
+        def capture_abort(message: str) -> None:
+            messages.append(message)
+            raise SystemExit(1)
+
+        monkeypatch.setattr(logger, "abort", capture_abort)
+        with pytest.raises(SystemExit):
+            resolve_remove_selection(
+                [], ["installed"], False, "skill", ["cursor"], "global"
+            )
+        assert len(messages) == 1
+        assert "Scope: global (user home)" in messages[0]
+        assert "Searching:" in messages[0]
+        assert "Detected: ['installed']" in messages[0]
+
+    def test_interactive_without_tty_aborts(self, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        with pytest.raises(SystemExit):
+            resolve_remove_selection(
+                [], ["installed"], True, "skill", ["cursor"], "local"
+            )
+
+    def test_tty_without_names_shows_checkbox(self, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        prompts: list[str] = []
+
+        def capture_checkbox(message: str, choices: list[str]) -> list[str]:
+            prompts.append(message)
+            return choices
+
+        monkeypatch.setattr(logger, "checkbox", capture_checkbox)
+        result = resolve_remove_selection(
+            [], ["a-skill", "b-skill"], False, "skill", ["cursor"], "local"
+        )
+        assert result == ["a-skill", "b-skill"]
+        assert prompts == ["Select skills to remove — local (current repository):"]
+
+    def test_empty_detected_on_tty_skips_checkbox(self, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        messages: list[str] = []
+
+        def fail_checkbox(_message: str, _choices: list[str]) -> list[str]:
+            raise AssertionError("checkbox should not be called when detected is empty")
+
+        monkeypatch.setattr(logger, "info", lambda msg: messages.append(msg))
+        monkeypatch.setattr(logger, "checkbox", fail_checkbox)
+        result = resolve_remove_selection([], [], False, "skill", ["cursor"], "local")
+        assert result == []
+        assert len(messages) == 1
+        assert "No installed skills found." in messages[0]
+        assert "Scope: local (current repository)" in messages[0]
+        assert "Searching:" in messages[0]
+
+
+class TestCollectConfirmedRemovals:
+    def test_accepts_and_declines(self, tmp_path, monkeypatch):
+        yes = tmp_path / "yes.txt"
+        no = tmp_path / "no.txt"
+        yes.write_text("yes")
+        no.write_text("no")
+
+        responses = iter([True, False])
+        monkeypatch.setattr(logger, "confirm", lambda _msg: next(responses))
+
+        confirmed, skipped = collect_confirmed_removals(
+            [("yes file", yes), ("no file", no)]
+        )
+        assert confirmed == [yes]
+        assert skipped == ["no file"]
+        assert yes.read_text() == "yes"
+        assert no.read_text() == "no"
+
+
+class TestRemovePath:
+    def test_backup_before_remove(self, tmp_path):
+        target = tmp_path / "out.txt"
+        target.write_text("data")
+        action = remove_path(target, backup=True)
+        assert action == "backed_up"
+        assert not target.exists()
+        assert (tmp_path / "out.txt.bak").read_text() == "data"
+
+
+class TestRemoveSkillRule:
+    def test_remove_skill(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        install_skill("grill-with-docs", ["cursor"], "local")
+        dest = tmp_path / ".cursor" / "skills" / "grill-with-docs"
+        assert dest.exists()
+        summary = remove_skill("grill-with-docs", ["cursor"], "local")
+        assert not dest.exists()
+        assert str(Path(".cursor") / "skills" / "grill-with-docs") in summary["removed"]
+
+    def test_remove_rule(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        install_rule("python-docstrings", ["claude"], "local")
+        dest = tmp_path / ".claude" / "rules" / "python-docstrings.md"
+        summary = remove_rule("python-docstrings", ["claude"], "local")
+        assert not dest.exists()
+        assert (
+            str(Path(".claude") / "rules" / "python-docstrings.md")
+            in summary["removed"]
+        )
+
+
+class TestRemoveConstitutionFile:
+    def test_removes_catalog_agents_md(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        install_constitution(DEFAULT_CONSTITUTION, ["cursor"], "local")
+        agents = tmp_path / "AGENTS.md"
+        action, _ = remove_constitution_file(agents)
+        assert action == "removed"
+        assert not agents.exists()
+
+    def test_skips_custom_agents_without_force(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("custom")
+        action, display = remove_constitution_file(agents, force=False)
+        assert action == "skipped"
+        # The skip reason must explain why a confirmed removal did nothing.
+        assert "pass --force to remove" in display
+        assert agents.exists()
+
+    def test_removes_custom_agents_with_force(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("custom")
+        action, _ = remove_constitution_file(agents, force=True)
+        assert action == "removed"
+        assert not agents.exists()
+
+    def test_deletes_import_stub_claude_md(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        claude = tmp_path / "CLAUDE.md"
+        claude.write_text(IMPORT_LINE)
+        action, _ = remove_constitution_file(claude)
+        assert action == "removed"
+        assert not claude.exists()
+
+    def test_strips_import_from_mixed_claude_md(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        claude = tmp_path / "CLAUDE.md"
+        claude.write_text(f"{IMPORT_LINE}\n\nbody")
+        action, display = remove_constitution_file(claude)
+        assert action == "modified"
+        assert "import removed" in display
+        assert IMPORT_LINE not in claude.read_text()
+        assert "body" in claude.read_text()
+
+
+class TestRemoveConstitution:
+    def test_confirmed_local_removal(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        install_constitution(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")
+        summary = remove_constitution(
+            ["cursor", "claude"],
+            "local",
+            confirmed_agents=True,
+            confirmed_claude=True,
+        )
+        assert not (tmp_path / "AGENTS.md").exists()
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert "AGENTS.md" in summary["removed"]
+        assert "CLAUDE.md" in summary["removed"]
+
+    def test_stripped_claude_md_recorded_as_modified(self, tmp_path, monkeypatch):
+        # An edited-but-kept CLAUDE.md must not be reported as "removed".
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "CLAUDE.md").write_text(f"{IMPORT_LINE}\n\nbody")
+        summary = remove_constitution(["claude"], "local", confirmed_claude=True)
+        assert (tmp_path / "CLAUDE.md").exists()
+        assert summary["removed"] == []
+        assert any("CLAUDE.md" in entry for entry in summary["modified"])
+
+    def test_constitution_paths_local(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        agents, claude = constitution_paths(["cursor", "claude"], "local")
+        assert agents == tmp_path / "AGENTS.md"
+        assert claude == tmp_path / "CLAUDE.md"
+
+    def test_constitution_paths_global_claude(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        agents, claude = constitution_paths(["claude"], "global")
+        assert agents == tmp_path / ".claude" / "AGENTS.md"
+        assert claude == tmp_path / ".claude" / "CLAUDE.md"

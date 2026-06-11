@@ -9,11 +9,16 @@ from cyclopts import App
 
 from siesta.cli import main
 from siesta.cli.agents_app import (
+    add_app,
     add_constitution,
     add_rule,
     add_skill,
     agents_app,
     quickstart,
+    remove_app,
+    remove_constitution_cmd,
+    remove_rule_cmd,
+    remove_skill_cmd,
 )
 from siesta.cli.docs_app import build_docs, docs_app, init_docs
 from siesta.cli.main_app import app
@@ -89,19 +94,31 @@ def test_tab_completions_app_registers_leaf_commands():
 
 
 def test_agents_app_registers_commands():
-    assert _command_names(agents_app) == {
-        "add-skill",
-        "add-rule",
-        "add-constitution",
-        "quickstart",
-    }
+    assert _command_names(agents_app) == {"add", "remove", "quickstart"}
+
+
+def test_add_app_registers_leaf_commands():
+    assert _command_names(add_app) == {"skill", "rule", "constitution"}
+
+
+def test_remove_app_registers_leaf_commands():
+    assert _command_names(remove_app) == {"skill", "rule", "constitution"}
 
 
 def test_agents_app_exposes_command_callables():
     assert callable(add_skill)
     assert callable(add_rule)
     assert callable(add_constitution)
+    assert callable(remove_skill_cmd)
+    assert callable(remove_rule_cmd)
+    assert callable(remove_constitution_cmd)
     assert callable(quickstart)
+
+
+def test_agents_app_does_not_register_legacy_flat_commands():
+    assert "add-skill" not in _command_names(agents_app)
+    assert "add-rule" not in _command_names(agents_app)
+    assert "add-constitution" not in _command_names(agents_app)
 
 
 def test_domain_modules_expose_command_callables():

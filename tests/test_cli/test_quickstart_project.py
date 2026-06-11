@@ -1,8 +1,20 @@
 # Copyright 2025 Entalpic
+import io
 from pathlib import Path
 
 import siesta.cli.project_app as cli
 from siesta.cli.main_app import app
+
+# Steps to disable so a quickstart run exercises only the uv-init decision.
+_NO_FEATURE_FLAGS = [
+    "--no-deps",
+    "--no-precommit",
+    "--no-tests",
+    "--no-actions",
+    "--no-gitignore",
+    "--no-docs",
+    "--no-agents",
+]
 
 
 def test_quickstart_project(tmp_path_chdir, capture_output):
@@ -154,7 +166,7 @@ def test_quickstart_test_scaffold_uses_normalized_import(tmp_path_chdir):
 def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypatch):
     """Test quickstart collects prompts before any mutating command runs."""
     events: list[str] = []
-    prompts = iter([True, True, True, True, True, True, True, True, False])
+    prompts = iter([True, True, True, True, True, True, True, True, True, False])
 
     def fake_confirm(message: str, default: bool = True) -> bool:
         events.append(f"confirm:{message}")
@@ -190,11 +202,15 @@ def test_quickstart_collects_decisions_before_mutations(tmp_path_chdir, monkeypa
     monkeypatch.setattr(
         cli, "write_or_update_pre_commit_file", lambda: events.append("precommit_file")
     )
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: events.append("ipdb"))
+    monkeypatch.setattr(
+        cli, "add_ipdb_as_debugger", lambda overwrite=False: events.append("ipdb")
+    )
     monkeypatch.setattr(
         cli, "setup_tests", lambda **_kwargs: events.append("setup_tests")
     )
-    monkeypatch.setattr(cli, "write_gitignore", lambda: events.append("gitignore"))
+    monkeypatch.setattr(
+        cli, "write_gitignore", lambda overwrite=False: events.append("gitignore")
+    )
     monkeypatch.setattr(
         "siesta.cli.docs_app.init_docs",
         lambda **_kwargs: events.append("init_docs"),
@@ -248,9 +264,9 @@ def test_quickstart_interactive_recommends_cli_defaults(tmp_path_chdir, monkeypa
     monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
     monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
-    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
 
     try:
@@ -283,9 +299,9 @@ def test_quickstart_interactive_recommends_dev_docs_deps(tmp_path_chdir, monkeyp
     monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
     monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
-    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda overwrite=False: None)
     monkeypatch.setattr(
         "siesta.cli.docs_app.init_docs",
         lambda **_kwargs: None,
@@ -330,7 +346,7 @@ def test_quickstart_interactive_respects_explicit_layout(tmp_path_chdir, monkeyp
     monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
 
     try:
-        app(["project", "quickstart", "-i", "--as-app"])
+        app(["project", "quickstart", "-i", "--as-app", "--uv-init"])
     except SystemExit as e:
         assert e.code == 0
 
@@ -396,9 +412,9 @@ def test_quickstart_fresh_project_delegates_docs_uv_detection(
     monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
     monkeypatch.setattr(cli, "write_or_update_pre_commit_file", lambda: None)
-    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda: None)
+    monkeypatch.setattr(cli, "add_ipdb_as_debugger", lambda overwrite=False: None)
     monkeypatch.setattr(cli, "setup_tests", lambda **_kwargs: None)
-    monkeypatch.setattr(cli, "write_gitignore", lambda: None)
+    monkeypatch.setattr(cli, "write_gitignore", lambda overwrite=False: None)
     monkeypatch.setattr(
         "siesta.cli.docs_app.init_docs",
         lambda **kwargs: init_docs_kwargs.update(kwargs),
@@ -424,6 +440,73 @@ def test_quickstart_installs_agents(tmp_path_chdir, capture_output):
     assert (tmp_path_chdir / "AGENTS.md").exists()
     assert (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs").is_dir()
     assert (tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc").exists()
+
+
+def test_quickstart_existing_uv_project_aborts_without_no_uv_init(
+    tmp_path_chdir, monkeypatch, capture_output
+):
+    """Non-TTY quickstart on an already-initialized project aborts unless opted out."""
+    (tmp_path_chdir / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+    # Force a non-TTY environment so the uv-init conflict resolves to abort.
+    monkeypatch.setattr("sys.stdin", io.StringIO())
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+
+    code = None
+    with capture_output() as output:
+        try:
+            app(["project", "quickstart"])
+        except SystemExit as e:
+            code = e.code
+
+    assert code != 0
+    assert "uv project" in output.getvalue()
+
+
+def test_quickstart_existing_uv_project_skips_with_no_uv_init(
+    tmp_path_chdir, monkeypatch, capture_output
+):
+    """--no-uv-init lets a non-TTY quickstart proceed on an existing project."""
+    (tmp_path_chdir / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+    monkeypatch.setattr("sys.stdin", io.StringIO())
+    commands: list[list[str]] = []
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(
+        cli, "run_command", lambda cmd, *_a, **_k: commands.append(cmd) or True
+    )
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    code = None
+    with capture_output() as output:
+        try:
+            app(["project", "quickstart", "--no-uv-init", *_NO_FEATURE_FLAGS])
+        except SystemExit as e:
+            code = e.code
+
+    assert code == 0
+    # uv init must not run, and no fresh-directory warning (the project already exists).
+    assert not any(cmd[:2] == ["uv", "init"] for cmd in commands)
+    assert "Skipping uv init on a fresh directory" not in output.getvalue()
+
+
+def test_quickstart_no_uv_init_on_fresh_project_warns(
+    tmp_path_chdir, monkeypatch, capture_output
+):
+    """--no-uv-init on a fresh directory warns that later steps may fail."""
+    monkeypatch.setattr("sys.stdin", io.StringIO())
+    monkeypatch.setattr(cli, "get_project_name", lambda _interactive: "test_siesta")
+    monkeypatch.setattr(cli, "run_command", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
+
+    code = None
+    with capture_output() as output:
+        try:
+            app(["project", "quickstart", "--no-uv-init", *_NO_FEATURE_FLAGS])
+        except SystemExit as e:
+            code = e.code
+
+    assert code == 0
+    assert "Skipping uv init on a fresh directory" in output.getvalue()
 
 
 def test_quickstart_respects_no_agents(tmp_path_chdir, capture_output):

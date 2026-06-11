@@ -1,6 +1,7 @@
 # Copyright 2025 Entalpic
 """Project CLI commands."""
 
+import sys
 from pathlib import Path
 from shutil import get_terminal_size
 from textwrap import dedent
@@ -61,16 +62,74 @@ def _confirm_quickstart_decision(message: str, default_key: str) -> bool:
     return logger.confirm(message, default=CLI_DEFAULTS[default_key])
 
 
+def _resolve_conflict(
+    name: str,
+    overwrite: bool | None,
+    allow_overwrite: bool = True,
+) -> bool:
+    """Resolve a Conflict between a planned Mutation and an existing artifact.
+
+    Must be called during the Prompt Collection Phase, before any Mutation.
+
+    Parameters
+    ----------
+    name : str
+        Human-readable description of the conflicting artifact (shown in prompts).
+    overwrite : bool | None
+        The global ``--overwrite`` flag. ``True`` = proceed, ``False`` = skip,
+        ``None`` = resolve at runtime.
+    allow_overwrite : bool, optional
+        Whether "overwrite" is a valid choice for this step. ``False`` for steps
+        where overwriting is not supported (e.g. ``uv init``).
+
+    Returns
+    -------
+    bool
+        ``True`` = proceed with the Mutation (overwrite). ``False`` = skip this step.
+        Never returns when the user chooses Abort — calls ``logger.abort()`` instead.
+    """
+    if overwrite is True:
+        if not allow_overwrite:
+            logger.warning(
+                f"{name} already exists. Overwrite not supported for this step — skipping."
+            )
+            return False
+        return True
+    if overwrite is False:
+        logger.warning(f"{name} already exists. Skipping.")
+        return False
+    # overwrite is None: resolve at runtime
+    if not sys.stdin.isatty():
+        logger.abort(
+            f"{name} already exists. "
+            "Pass --overwrite to overwrite or the matching --no-<feature> flag to skip."
+        )
+    if allow_overwrite:
+        choice = logger.select(
+            f"{name} already exists — what do you want to do?",
+            ["Skip (keep existing)", "Overwrite", "Abort"],
+        )
+    else:
+        choice = logger.select(
+            f"{name} already exists — what do you want to do?",
+            ["Skip (keep existing)", "Abort"],
+        )
+    if choice == "Abort":
+        logger.abort("Aborted.")
+    return choice == "Overwrite"
+
+
 @project_app.command(name="quickstart")
 def quickstart_project(
     as_app: bool = False,
     as_pkg: bool = False,
+    uv_init: bool | None = None,
     precommit: bool | None = None,
     docs: bool | None = None,
     deps: bool | None = None,
     docs_path: str = "./docs",
     as_main_deps: bool | None = None,
-    overwrite: bool = False,
+    overwrite: bool | None = None,
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
     branch: str = "main",
     contents: str = "src/siesta/boilerplate",
@@ -131,6 +190,11 @@ def quickstart_project(
         Whether to initialize the project as an app (just a script file to start with).
     as_pkg : bool, optional
         Whether to initialize the project as a package (with a package structure in the root directory).
+    uv_init : bool, optional
+        Whether to initialize a ``uv`` project (``$ uv init``), by default ``None`` (i.e.
+        prompt the user). Use ``--no-uv-init`` to skip — note the other steps (``--deps``,
+        ``--precommit``) need a ``uv`` project to exist, so skipping it on a fresh directory
+        will make them fail.
     precommit : bool, optional
         Whether to install pre-commit hooks, by default ``None`` (i.e. prompt the user).
     docs : bool, optional
@@ -142,9 +206,9 @@ def quickstart_project(
     as_main_deps : bool, optional
         Whether to include docs dependencies in the main dependencies, by default
         ``None`` (i.e. prompt the user).
-    overwrite : bool, optional
-        Whether to overwrite existing files (if any). Will be passed to ``siesta
-        docs init``.
+    overwrite : bool | None, optional
+        How to handle existing artifacts. ``True`` = overwrite all, ``False`` = skip all,
+        ``None`` (default) = prompt in TTY or abort in non-TTY.
     interactive : bool, optional
         Enable interactive mode with prompts for all options (``-i``). By default,
         sensible defaults are used. User-specified flags always take precedence.
@@ -183,6 +247,8 @@ def quickstart_project(
 
     # Setting defaults: only fill in values that weren't explicitly provided
     if not interactive:
+        if uv_init is None:
+            uv_init = CLI_DEFAULTS["uv_init"]
         if precommit is None:
             precommit = CLI_DEFAULTS["precommit"]
         if docs is None:
@@ -215,6 +281,11 @@ def quickstart_project(
         as_app = layout == "Application script"
         as_pkg = layout == "Package without src/ layout"
 
+    if uv_init is None:
+        uv_init = _confirm_quickstart_decision(
+            "Would you like to initialize a uv project?", "uv_init"
+        )
+
     if deps is None:
         deps = _confirm_quickstart_decision(
             "Would you like to install recommended dependencies?", "deps"
@@ -229,6 +300,21 @@ def quickstart_project(
         ipdb = _confirm_quickstart_decision(
             "Would you like to add ipdb as debugger?", "ipdb"
         )
+    ipdb_overwrite = False
+    if ipdb:
+        _inits = list(Path("src/").glob("**/__init__.py"))
+        if _inits:
+            _first_init = sorted(
+                [(_i, len(str(_i).split("/"))) for _i in _inits], key=lambda x: x[1]
+            )[0][0]
+            if "PYTHONBREAKPOINT" in _first_init.read_text():
+                result = _resolve_conflict(
+                    "ipdb debugger (PYTHONBREAKPOINT already present)", overwrite
+                )
+                if not result:
+                    ipdb = False
+                else:
+                    ipdb_overwrite = True
 
     if tests is None:
         tests = _confirm_quickstart_decision(
@@ -244,6 +330,13 @@ def quickstart_project(
         gitignore = _confirm_quickstart_decision(
             "Would you like to initialize the ``.gitignore`` file?", "gitignore"
         )
+    gitignore_overwrite = False
+    if gitignore and Path(".gitignore").exists():
+        result = _resolve_conflict(".gitignore", overwrite)
+        if not result:
+            gitignore = False
+        else:
+            gitignore_overwrite = True
 
     if docs is None:
         docs = _confirm_quickstart_decision(
@@ -252,6 +345,14 @@ def quickstart_project(
 
     if docs and interactive and docs_path == "./docs":
         docs_path = logger.prompt("Documentation path", default=docs_path)
+
+    docs_overwrite = False
+    if docs and resolve_path(docs_path).exists():
+        result = _resolve_conflict(f"docs at {docs_path}", overwrite)
+        if not result:
+            docs = False
+        else:
+            docs_overwrite = True
 
     if agents is None:
         agents = _confirm_quickstart_decision(
@@ -274,9 +375,31 @@ def quickstart_project(
             else:
                 docs_with_uv = True
 
+    # Conflict Resolution: uv init. Overwriting uv init is not supported by uv
+    # itself, so this conflict is skip-only and resolved here, just before execution.
+    already_initialized = Path("uv.lock").exists() or Path("pyproject.toml").exists()
+    if uv_init is False:
+        # Explicit opt-out. Warn when there is no uv project yet, since the remaining
+        # steps (deps, pre-commit, ...) need one to exist.
+        if not already_initialized:
+            logger.warning(
+                "Skipping uv init on a fresh directory — dependency and pre-commit "
+                "steps may fail without a uv project."
+            )
+        run_uv_init = False
+    elif already_initialized:
+        run_uv_init = False
+        _resolve_conflict(
+            "uv project (pyproject.toml or uv.lock already exists — safe to skip if already set up with uv)",
+            overwrite,
+            allow_overwrite=False,
+        )
+        logger.info("Skipping uv init — project already initialized.")
+    else:
+        run_uv_init = True
+
     # Execution phase: perform mutations after all decisions are collected.
-    has_uv_lock = Path("uv.lock").exists()
-    if not has_uv_lock:
+    if run_uv_init:
         cmd = ["uv", "init"]
         cmd.append(f"--name={project_name}")
         if as_app:
@@ -293,8 +416,6 @@ def quickstart_project(
         if initialized is False:
             logger.abort("Failed to initialize the project.")
         logger.info("Project initialized with uv.")
-    else:
-        logger.info("Project already initialized with uv.")
 
     if deps:
         dev_deps = load_deps()["dev"]
@@ -311,7 +432,7 @@ def quickstart_project(
         logger.info("Pre-commit hooks installed.")
 
     if ipdb:
-        add_ipdb_as_debugger()
+        add_ipdb_as_debugger(overwrite=ipdb_overwrite)
         logger.info("[r]ipdb[/r] added as debugger.")
 
     if tests:
@@ -334,7 +455,7 @@ def quickstart_project(
         logger.info("Test actions config written.")
 
     if gitignore:
-        write_gitignore()
+        write_gitignore(overwrite=gitignore_overwrite)
         logger.info("Gitignore written.")
 
     if docs:
@@ -343,7 +464,7 @@ def quickstart_project(
         init_docs(
             path=docs_path,
             as_main_deps=bool(as_main_deps),
-            overwrite=overwrite,
+            overwrite=docs_overwrite,
             deps=deps,
             uv=docs_with_uv,
             interactive=False,
@@ -356,8 +477,9 @@ def quickstart_project(
     if agents:
         # Back up existing agent files when overwriting so a user-authored
         # CLAUDE.md/AGENTS.md is recoverable from a .bak.
+        _overwrite = overwrite is True
         summary = install_quickstart(
-            ["cursor", "claude"], "local", force=overwrite, backup=overwrite
+            ["cursor", "claude"], "local", force=_overwrite, backup=_overwrite
         )
         print_summary(summary)
         logger.info("Agent assets installed.")

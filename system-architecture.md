@@ -33,7 +33,7 @@ graph TB
     subgraph cli["CLI Domain Modules (command groups)"]
         DOCS["docs_app<br/>init / build / watch / open / update"]
         PROJ["project_app<br/>quickstart / setup-tests / tree"]
-        AGENTS["agents_app<br/>add-skill / add-rule<br/>add-constitution / quickstart"]
+        AGENTS["agents_app<br/>add skill / add rule / add constitution<br/>remove skill / remove rule / remove constitution / quickstart"]
         SELF["self_app<br/>version / update / *-github-pat<br/>show-deps / tab-completions"]
     end
 
@@ -154,6 +154,7 @@ relevant sections here:
 | [0002](docs/adr/0002-cli-package-modularization.md) | CLI Package Modularization | The `cli/` ↔ `utils/` layering |
 | [0003](docs/adr/0003-secret-handling-policy.md) | Secret Handling Policy | PAT handling in `self_app` / `github` |
 | [0004](docs/adr/0004-cross-provider-agent-assets.md) | Cross-Provider Agent Asset Installation | Providers, Asset Scope, Mirroring |
+| [0005](docs/adr/0005-nested-agent-asset-operations.md) | Nested Agent Asset Operations | `agents add` / `agents remove` command shape |
 
 ## Core Concepts
 
@@ -262,10 +263,15 @@ update check whose result is printed only on clean exit.
 
 ### `agents_app` + `utils/agents`
 **Location**: [agents_app.py](src/siesta/cli/agents_app.py), [utils/agents.py](src/siesta/utils/agents.py)
-The richest domain. Commands `add-skill`, `add-rule`, `add-constitution`, and `quickstart`
-are thin: they resolve scope/providers/selection (Validation Phase) then loop over
-installers (Execution Phase). All catalog discovery, path resolution, `.mdc` translation,
-the conflict-aware writer, and the `quickstart.yaml` loader live in `utils/agents`.
+The richest domain. Nested `add` and `remove` sub-apps expose per-kind commands
+(`skill`, `rule`, `constitution`); `quickstart` stays at the `agents` level.
+Add commands are thin: they resolve scope/providers/selection (Validation Phase)
+then loop over installers (Execution Phase). Remove commands follow a stricter
+validate → collect per-candidate confirmations → mutate flow: every detected
+removal target is confirmed through questionary before any file is deleted or
+rewritten. All catalog discovery, installed-asset detection, path resolution,
+``.mdc`` translation, the conflict-aware writer, conservative Constitution
+removal, and the `quickstart.yaml` loader live in `utils/agents`.
 `install_quickstart` validates every name in the **Quickstart Config** against the catalog
 before any write, then reuses the per-asset installers.
 
