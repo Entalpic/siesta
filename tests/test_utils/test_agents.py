@@ -808,8 +808,10 @@ class TestRemoveConstitutionFile:
         monkeypatch.chdir(tmp_path)
         agents = tmp_path / "AGENTS.md"
         agents.write_text("custom")
-        action, _ = remove_constitution_file(agents, force=False)
+        action, display = remove_constitution_file(agents, force=False)
         assert action == "skipped"
+        # The skip reason must explain why a confirmed removal did nothing.
+        assert "pass --force to remove" in display
         assert agents.exists()
 
     def test_removes_custom_agents_with_force(self, tmp_path, monkeypatch):
@@ -853,6 +855,15 @@ class TestRemoveConstitution:
         assert not (tmp_path / "CLAUDE.md").exists()
         assert "AGENTS.md" in summary["removed"]
         assert "CLAUDE.md" in summary["removed"]
+
+    def test_stripped_claude_md_recorded_as_modified(self, tmp_path, monkeypatch):
+        # An edited-but-kept CLAUDE.md must not be reported as "removed".
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "CLAUDE.md").write_text(f"{IMPORT_LINE}\n\nbody")
+        summary = remove_constitution(["claude"], "local", confirmed_claude=True)
+        assert (tmp_path / "CLAUDE.md").exists()
+        assert summary["removed"] == []
+        assert any("CLAUDE.md" in entry for entry in summary["modified"])
 
     def test_constitution_paths_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)

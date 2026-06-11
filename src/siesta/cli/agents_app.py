@@ -2,6 +2,7 @@
 """Agent asset CLI commands (``siesta agents``)."""
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from textwrap import dedent
 from typing import Annotated
@@ -562,11 +563,16 @@ def remove_constitution_cmd(
     confirmed_agents = False
     confirmed_claude = False
 
-    if agents_path and agents_path.exists():
+    agents_exists = bool(agents_path and agents_path.exists())
+    claude_exists = bool(claude_path and claude_path.exists())
+    if agents_exists or claude_exists:
+        _require_tty()
+
+    if agents_exists:
         label = f"AGENTS.md ({_display_path(agents_path)})"
         confirmed_agents = logger.confirm(f"Remove {label}?")
 
-    if claude_path and claude_path.exists():
+    if claude_exists:
         label = f"CLAUDE.md ({_display_path(claude_path)})"
         confirmed_claude = logger.confirm(f"Remove {label}?")
 
@@ -586,19 +592,39 @@ def remove_constitution_cmd(
     print_removal_summary(summary)
 
 
+def _require_tty() -> None:
+    """Abort cleanly when per-file removal confirmations cannot be collected.
+
+    Removal always confirms each target individually, which needs a terminal.
+    In a non-TTY environment, abort with guidance instead of letting the
+    confirmation prompt raise a bare ``KeyboardInterrupt``.
+    """
+    if not sys.stdin.isatty():
+        logger.abort(
+            "Confirming removals requires a terminal (no TTY). "
+            "Re-run in an interactive shell."
+        )
+
+
 def _build_removal_candidates(
     names: list[str],
     providers: list[str],
     scope: str,
-    target_fn,
+    target_fn: Callable[[str, str, str], Path],
     kind: str,
 ) -> list[tuple[str, Path, str, str]]:
-    """Build ``(label, path, name, provider)`` tuples for existing targets."""
+    """Build ``(label, path, name, provider)`` tuples for existing targets.
+
+    Targets are de-duplicated by path so a repeated name (``remove skill x x``)
+    is only proposed — and confirmed — once.
+    """
     candidates: list[tuple[str, Path, str, str]] = []
+    seen: set[Path] = set()
     for name in names:
         for provider in providers:
             dest = target_fn(provider, scope, name)
-            if dest.exists():
+            if dest.exists() and dest not in seen:
+                seen.add(dest)
                 label = f"{provider} {kind} {name!r} ({_display_path(dest)})"
                 candidates.append((label, dest, name, provider))
     return candidates
@@ -608,6 +634,8 @@ def _confirm_removal_candidates(
     candidates: list[tuple[str, Path, str, str]],
 ) -> tuple[list[tuple[str, Path, str, str]], list[str]]:
     """Confirm each candidate; return confirmed tuples and skipped labels."""
+    if candidates:
+        _require_tty()
     path_candidates = [(label, path) for label, path, _, _ in candidates]
     confirmed_paths, skipped_labels = collect_confirmed_removals(path_candidates)
     confirmed = [

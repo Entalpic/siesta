@@ -1238,6 +1238,8 @@ def _record_removal(summary: dict[str, list[str]], action: str, path: str) -> No
         summary["backed_up"].append(path)
     elif action == "skipped":
         summary["skipped"].append(path)
+    elif action == "modified":
+        summary["modified"].append(path)
 
 
 def remove_skill(
@@ -1338,7 +1340,7 @@ def remove_constitution_file(
 
     if path.name == "AGENTS.md":
         if content not in _catalog_agents_md_contents() and not force:
-            return "skipped", display
+            return "skipped", display + " (user-authored; pass --force to remove)"
         if backup:
             _apply_backup(path)
             return "backed_up", display
@@ -1348,7 +1350,7 @@ def remove_constitution_file(
     # CLAUDE.md
     if IMPORT_LINE not in content:
         if not force:
-            return "skipped", display
+            return "skipped", display + " (user-authored; pass --force to remove)"
         if backup:
             _apply_backup(path)
             return "backed_up", display
@@ -1363,10 +1365,12 @@ def remove_constitution_file(
         return "removed", display
 
     new_content = _strip_agents_import(content)
+    suffix = " (import removed)"
     if backup:
         _apply_backup(path)
+        suffix = " (import removed; original backed up)"
     path.write_text(new_content + ("\n" if new_content else ""), encoding="utf-8")
-    return "modified", display + " (import removed)"
+    return "modified", display + suffix
 
 
 def remove_constitution(
@@ -1398,36 +1402,33 @@ def remove_constitution(
     Returns
     -------
     dict[str, list[str]]
-        ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
+        ``{"removed": [...], "skipped": [...], "backed_up": [...], "modified": [...]}``
+        where ``"modified"`` holds files edited in place (e.g. a ``CLAUDE.md``
+        whose ``@AGENTS.md`` import was stripped while the body was kept).
     """
-    summary: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
+    summary: dict[str, list[str]] = {
+        "removed": [],
+        "skipped": [],
+        "backed_up": [],
+        "modified": [],
+    }
 
-    if providers == ["cursor"] and scope == "global":
-        logger.warning(
-            "Constitution is project-scoped for Cursor; nothing to do globally. "
-            "Tip: use --local (default) or --claude to target Claude's global ~/.claude/."
-        )
-        return summary
-
+    # constitution_paths returns (None, None) for the cursor/global combination,
+    # so no removal branch runs and an empty summary is returned. The user-facing
+    # warning for that case lives in the CLI command (remove_constitution_cmd).
     agents_path, claude_path = constitution_paths(providers, scope)
 
     if confirmed_agents and agents_path and agents_path.exists():
         action, display = remove_constitution_file(
             agents_path, force=force, backup=backup
         )
-        if action == "modified":
-            summary["removed"].append(display)
-        else:
-            _record_removal(summary, action, display)
+        _record_removal(summary, action, display)
 
     if confirmed_claude and claude_path and claude_path.exists():
         action, display = remove_constitution_file(
             claude_path, force=force, backup=backup
         )
-        if action == "modified":
-            summary["removed"].append(display)
-        else:
-            _record_removal(summary, action, display)
+        _record_removal(summary, action, display)
 
     return summary
 
@@ -1438,20 +1439,25 @@ def print_removal_summary(summary: dict[str, list[str]]) -> None:
     Parameters
     ----------
     summary : dict[str, list[str]]
-        ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
+        ``{"removed": [...], "skipped": [...], "backed_up": [...], "modified": [...]}``
+        (``"modified"`` is optional and only present for constitution removals).
     """
     removed = summary.get("removed", [])
     skipped = summary.get("skipped", [])
     backed_up = summary.get("backed_up", [])
+    modified = summary.get("modified", [])
 
     if removed:
         for path in removed:
             logger.success(f"Removed: {path}")
+    if modified:
+        for path in modified:
+            logger.success(f"Updated: {path}")
     if backed_up:
         for path in backed_up:
             logger.info(f"Backed up + removed: {path}")
     if skipped:
         for path in skipped:
             logger.warning(f"Skipped: {path}")
-    if not removed and not backed_up and not skipped:
+    if not removed and not backed_up and not skipped and not modified:
         logger.info("Nothing to do.")

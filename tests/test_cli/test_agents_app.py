@@ -262,6 +262,7 @@ class TestAddConstitution:
 
 class TestRemoveSkill:
     def test_removes_skill_after_confirmation(self, tmp_path_chdir, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
         dest = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs"
@@ -270,6 +271,7 @@ class TestRemoveSkill:
         assert not dest.exists()
 
     def test_declining_confirmation_skips_removal(self, tmp_path_chdir, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_no)
         run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
         dest = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs"
@@ -288,6 +290,7 @@ class TestRemoveSkill:
 
     def test_global_scope_targets_home(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         (tmp_path / "repo").mkdir(exist_ok=True)
         monkeypatch.chdir(tmp_path / "repo")
@@ -297,6 +300,40 @@ class TestRemoveSkill:
         run("agents", "remove", "skill", "grill-with-docs", "--claude", "--global")
         assert not dest.exists()
 
+    def test_duplicate_names_confirmed_once(self, tmp_path_chdir, monkeypatch):
+        # A repeated name must be proposed and confirmed a single time.
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        calls = {"n": 0}
+
+        def counting_confirm(_message, default=True):
+            calls["n"] += 1
+            return True
+
+        monkeypatch.setattr(logger, "confirm", counting_confirm)
+        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
+        dest = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs"
+        run(
+            "agents",
+            "remove",
+            "skill",
+            "grill-with-docs",
+            "grill-with-docs",
+            "--cursor",
+        )
+        assert calls["n"] == 1
+        assert not dest.exists()
+
+    def test_non_interactive_with_name_aborts_cleanly(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        # Removal confirms each file, which needs a TTY; explicit names in a
+        # non-TTY shell must abort cleanly, not raise a bare KeyboardInterrupt.
+        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        code = run("agents", "remove", "skill", "grill-with-docs", "--cursor")
+        assert code != 0
+        assert (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs").exists()
+
 
 # ---------------------------------------------------------------------------
 # remove rule
@@ -305,6 +342,7 @@ class TestRemoveSkill:
 
 class TestRemoveRule:
     def test_removes_rule_after_confirmation(self, tmp_path_chdir, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         run("agents", "add", "rule", "python-docstrings", "--claude")
         dest = tmp_path_chdir / ".claude" / "rules" / "python-docstrings.md"
@@ -313,6 +351,7 @@ class TestRemoveRule:
         assert not dest.exists()
 
     def test_declining_confirmation_skips_removal(self, tmp_path_chdir, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_no)
         run("agents", "add", "rule", "python-docstrings", "--claude")
         dest = tmp_path_chdir / ".claude" / "rules" / "python-docstrings.md"
@@ -329,6 +368,7 @@ class TestRemoveConstitution:
     def test_removes_catalog_agents_after_confirmation(
         self, tmp_path_chdir, monkeypatch
     ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         run("agents", "add", "constitution", "--cursor")
         agents = tmp_path_chdir / "AGENTS.md"
@@ -337,18 +377,21 @@ class TestRemoveConstitution:
         assert not agents.exists()
 
     def test_skips_user_agents_without_force(self, tmp_path_chdir, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         (tmp_path_chdir / "AGENTS.md").write_text("my custom constitution")
         run("agents", "remove", "constitution", "--cursor")
         assert (tmp_path_chdir / "AGENTS.md").read_text() == "my custom constitution"
 
     def test_removes_user_agents_with_force(self, tmp_path_chdir, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         (tmp_path_chdir / "AGENTS.md").write_text("my custom constitution")
         run("agents", "remove", "constitution", "--cursor", "--force")
         assert not (tmp_path_chdir / "AGENTS.md").exists()
 
     def test_removes_import_stub_claude_md(self, tmp_path_chdir, monkeypatch):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         run("agents", "add", "constitution", "--claude")
         claude = tmp_path_chdir / "CLAUDE.md"
@@ -359,12 +402,21 @@ class TestRemoveConstitution:
     def test_removes_only_import_from_mixed_claude_md(
         self, tmp_path_chdir, monkeypatch
     ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(logger, "confirm", confirm_yes)
         (tmp_path_chdir / "CLAUDE.md").write_text(f"{IMPORT_LINE}\n\nmy stuff")
         run("agents", "remove", "constitution", "--claude")
         content = (tmp_path_chdir / "CLAUDE.md").read_text()
         assert IMPORT_LINE not in content
         assert "my stuff" in content
+
+    def test_non_interactive_aborts_cleanly(self, tmp_path_chdir, monkeypatch):
+        # An existing constitution file in a non-TTY shell must abort cleanly.
+        (tmp_path_chdir / "AGENTS.md").write_text("my custom constitution")
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        code = run("agents", "remove", "constitution", "--cursor")
+        assert code != 0
+        assert (tmp_path_chdir / "AGENTS.md").exists()
 
 
 # ---------------------------------------------------------------------------
