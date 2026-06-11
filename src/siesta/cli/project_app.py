@@ -123,6 +123,7 @@ def _resolve_conflict(
 def quickstart_project(
     as_app: bool = False,
     as_pkg: bool = False,
+    uv_init: bool | None = None,
     precommit: bool | None = None,
     docs: bool | None = None,
     deps: bool | None = None,
@@ -189,6 +190,11 @@ def quickstart_project(
         Whether to initialize the project as an app (just a script file to start with).
     as_pkg : bool, optional
         Whether to initialize the project as a package (with a package structure in the root directory).
+    uv_init : bool, optional
+        Whether to initialize a ``uv`` project (``$ uv init``), by default ``None`` (i.e.
+        prompt the user). Use ``--no-uv-init`` to skip — note the other steps (``--deps``,
+        ``--precommit``) need a ``uv`` project to exist, so skipping it on a fresh directory
+        will make them fail.
     precommit : bool, optional
         Whether to install pre-commit hooks, by default ``None`` (i.e. prompt the user).
     docs : bool, optional
@@ -241,6 +247,8 @@ def quickstart_project(
 
     # Setting defaults: only fill in values that weren't explicitly provided
     if not interactive:
+        if uv_init is None:
+            uv_init = CLI_DEFAULTS["uv_init"]
         if precommit is None:
             precommit = CLI_DEFAULTS["precommit"]
         if docs is None:
@@ -272,6 +280,11 @@ def quickstart_project(
         )
         as_app = layout == "Application script"
         as_pkg = layout == "Package without src/ layout"
+
+    if uv_init is None:
+        uv_init = _confirm_quickstart_decision(
+            "Would you like to initialize a uv project?", "uv_init"
+        )
 
     if deps is None:
         deps = _confirm_quickstart_decision(
@@ -335,7 +348,7 @@ def quickstart_project(
 
     docs_overwrite = False
     if docs and resolve_path(docs_path).exists():
-        result = _resolve_conflict(f"docs at {resolve_path(docs_path)}", overwrite)
+        result = _resolve_conflict(f"docs at {docs_path}", overwrite)
         if not result:
             docs = False
         else:
@@ -362,16 +375,28 @@ def quickstart_project(
             else:
                 docs_with_uv = True
 
-    # Conflict Resolution: uv init. Not tied to a feature flag so resolved here,
-    # just before execution. Overwriting uv init is not supported by uv itself.
-    run_uv_init = not (Path("uv.lock").exists() or Path("pyproject.toml").exists())
-    if not run_uv_init:
+    # Conflict Resolution: uv init. Overwriting uv init is not supported by uv
+    # itself, so this conflict is skip-only and resolved here, just before execution.
+    already_initialized = Path("uv.lock").exists() or Path("pyproject.toml").exists()
+    if uv_init is False:
+        # Explicit opt-out. Warn when there is no uv project yet, since the remaining
+        # steps (deps, pre-commit, ...) need one to exist.
+        if not already_initialized:
+            logger.warning(
+                "Skipping uv init on a fresh directory — dependency and pre-commit "
+                "steps may fail without a uv project."
+            )
+        run_uv_init = False
+    elif already_initialized:
+        run_uv_init = False
         _resolve_conflict(
             "uv project (pyproject.toml or uv.lock already exists — safe to skip if already set up with uv)",
             overwrite,
             allow_overwrite=False,
         )
         logger.info("Skipping uv init — project already initialized.")
+    else:
+        run_uv_init = True
 
     # Execution phase: perform mutations after all decisions are collected.
     if run_uv_init:

@@ -24,6 +24,7 @@ ROOT = importlib.resources.files(PACKAGE_NAME)
 """Root directory of the ``siesta`` package."""
 
 CLI_DEFAULTS = {
+    "uv_init": True,
     "deps": True,
     "as_main_deps": False,
     "precommit": True,
@@ -36,6 +37,7 @@ CLI_DEFAULTS = {
 }
 """Default values for the CLI when not in ``interactive`` mode.
 
+- ``uv_init``: Whether to initialize a ``uv`` project (``$ uv init``), by default ``True``.
 - ``deps``: Whether to install dependencies (dev &? docs), by default ``True``.
 - ``as_main_deps``: Whether to include docs dependencies in the main dependencies, by default ``False``.
 - ``precommit``: Whether to install pre-commit hooks, by default ``True``.
