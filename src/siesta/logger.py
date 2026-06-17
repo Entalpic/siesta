@@ -453,13 +453,13 @@ class Logger(BaseLogger):
 
         Parameters
         ----------
-        *args :
+        \\*args :
             The arguments to print.
         title : str, optional
             The title of the panel, by default None.
         as_panel : bool, optional
             Whether to print the message in a panel, by default False.
-        **kwargs :
+        \\*\\*kwargs :
             The keyword arguments to print.
         """
         if as_panel:

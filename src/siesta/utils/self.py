@@ -45,10 +45,14 @@ if TYPE_CHECKING:
     from typing import TypedDict
 
     class CacheData(TypedDict):
+        """Cached update-check state persisted between siesta invocations."""
+
         last_check: float
         latest_version: str | None
 
     class InstallationMetadata(TypedDict):
+        """Details about how siesta was installed and how to update it."""
+
         method: str
         source: str
         executable_path: str

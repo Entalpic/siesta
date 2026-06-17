@@ -1,6 +1,9 @@
 .. Copyright 2025 Entalpic
+.. _example-docs:
+
+##########################
 Example documentation file
-==========================
+##########################
 
 This is an example documentation file that illustrates how to use ``.rst`` syntax to write documentation, including **tutorials**.
 
@@ -12,9 +15,9 @@ Remember, this works in docstrings *and* in stand-alone ``.rst`` files.
 
 .. code-block:: python
 
-    import siesta
+    from siesta.cli.main_app import app
 
-    siesta.cli.app()
+    app()
 
 .. note::
 
@@ -33,9 +36,9 @@ Reference code docs of:
 - A method :meth:`~siesta.logger.Logger.prompt`
 - Or even an external library :class:`github.MainClass.Github`
 
-.. note
+.. note::
 
-    External content should be listed in ``docs/conf.py:intersphinx_mapping``.
+    External content should be listed in ``docs/source/conf.py`` under ``intersphinx_mapping``.
     More info in the `Read The Docs documentation <https://docs.readthedocs.io/en/stable/guides/intersphinx.html>`_.
 
 An actual tutorial on ``.rst``:
@@ -75,22 +78,7 @@ An actual tutorial on ``.rst``:
 
 .. dropdown::  :octicon:`megaphone` Want to learn more?
 
-    You can also have images!
-
-    .. image:: https://picsum.photos/300
-        :alt: A cute animal
-
-    And icons :octicon:`project` and badges :bdg-primary:`primary`, :bdg-primary-line:`primary-line`
-
-    Or emphasize a link:
-
-    .. article-info::
-        :avatar: https://raw.githubusercontent.com/tristandeleu/jax-dag-gflownet/master/_assets/dag_gflownet.png
-        :avatar-link: https://www.youtube.com/watch?v=dQw4w9WgXcQ
-        :avatar-outline: muted
-        :author: Some Author
-        :date: Jul 24, 2021
-        :read-time: 5 min read
-        :class-container: sd-p-2 sd-outline-muted sd-rounded-1
+    You can use icons :octicon:`project` and badges :bdg-primary:`primary`,
+    :bdg-primary-line:`primary-line`.
 
     This is all documented in `Sphinx-Design <https://shibuya.lepture.com/extensions/sphinx-design/>`_.

@@ -1,4 +1,5 @@
 .. Copyright 2025 Entalpic
+
 Documentation At Entalpic
 =========================
 
@@ -44,6 +45,3 @@ It includes both the code's *docstrings* and the *manual documentation files* li
     /guide/write-documentation
     /guide/write-docstrings
     /guide/example
-
-    .. /guide/github
-    .. /guide/ruff

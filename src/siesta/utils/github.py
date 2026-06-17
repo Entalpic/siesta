@@ -24,6 +24,8 @@ from siesta.utils.config import GITHUB_OWNER, GITHUB_REPO
 
 
 class CommitInfo(TypedDict):
+    """Commit metadata returned by :func:`get_latest_commit_info`."""
+
     hash: str
     author: str
     time: datetime

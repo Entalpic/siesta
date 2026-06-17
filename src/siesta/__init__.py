@@ -3,7 +3,7 @@ r"""
 .. _siesta-cli-tutorial:
 
 ``siesta`` CLI Tutorial
--------------------
+-----------------------
 
 **Siesta Is Entalpic'S Terminal Assistant.**
 
@@ -35,11 +35,7 @@ TL;DR
 
 .. code-block:: bash
 
-    # Interactive setup
     $ siesta docs init
-
-    # Non-interactive setup
-    $ siesta docs init --with-defaults
 
 **Work with documentation:**
 
@@ -67,9 +63,7 @@ For brand new projects, use the ``project`` command:
 
 .. code-block:: bash
 
-    # Look at your options
     $ siesta project quickstart --help
-    # Then you would typically use the `--with-defaults` flag
     $ siesta project quickstart
 
 What happens is the following:
@@ -78,13 +72,13 @@ What happens is the following:
 2. Using ``uv add``, common development dependencies are added to the project.
 3. Pre-commit hooks to format and lint the code with ``ruff`` are added.
 4. A testing infrastructure is added with ``pytest`` and automated execution with ``GitHub Actions``.
-5. The Sphinx documentation to automatically render your project's docstrings is initialized with ``siesta docs init`` to create a ``docs/`` folder
+5. A ``.gitignore`` file is written.
+6. The Sphinx documentation to automatically render your project's docstrings is initialized with ``siesta docs init`` to create a ``docs/`` folder
    and install the necessary dependencies for documentation.
+7. Recommended Agent Assets (Skills, Rules, Constitution) are installed via ``siesta agents quickstart``.
 
-.. tip::
-
-    ``siesta`` also sets up this new Python project with ``ipdb`` as default debugger. This means that when you call ``breakpoint()``
-    an improved debugger will be launched instead of the default ``pdb``. `Learn more <https://hasil-sharma.github.io/2017-05-13-python-ipdb/>`_ about ``ipdb``.
+``siesta`` also sets up the project with ``ipdb`` as default debugger. When you call ``breakpoint()``
+an improved debugger will be launched instead of the default ``pdb``. `Learn more <https://hasil-sharma.github.io/2017-05-13-python-ipdb/>`_ about ``ipdb``.
 
 Docs Only
 =========
@@ -93,27 +87,24 @@ the ``docs`` command with the ``init`` subcommand.
 
 .. code-block:: bash
 
-
     $ siesta docs init --help
-    $ siesta docs init --with-defaults
+    $ siesta docs init
 
 This creates a ``docs/`` folder in your project and installs the necessary
 dependencies. By default, the bundled local boilerplate files are used. To fetch the
-most up-to-date files from the Entalpic Github repository, use the ``--remote-assets``
-flag (requires a Github Personal Access Token).
+most up-to-date files from the Entalpic GitHub repository, use the ``--remote-assets``
+flag (requires a GitHub Personal Access Token).
 
 .. code-block:: bash
 
-    $ siesta docs init --uv --with-defaults
-
-    # Or, to fetch the latest remote files:
+    # Fetch the latest remote files:
     $ siesta self set-github-pat
-    $ siesta docs init --uv --with-defaults --remote-assets
+    $ siesta docs init --remote-assets
 
 Going further
 =============
 
-Currently ``siesta`` has 3 main subcommands:
+``siesta`` has 4 command groups:
 
 **``docs`` subcommands:**
 
@@ -121,7 +112,7 @@ Currently ``siesta`` has 3 main subcommands:
   documentation.
 - ``docs build`` to build the HTML documentation locally (equivalent to running
   ``make clean && make html`` in the docs folder).
-- ``docs update`` to update the documentation boilerplate files in your project from Github. Typically updating the brand assets and colors.
+- ``docs update`` to update the documentation boilerplate files in your project from GitHub. Typically updating the brand assets and colors.
 - ``docs watch`` to automatically build the docs when source files are changed.
 
 **``project`` subcommands:**
@@ -131,13 +122,21 @@ Currently ``siesta`` has 3 main subcommands:
 - ``project setup-tests`` to add pytest testing infrastructure to an existing project.
 - ``project tree`` to display the project's directory structure.
 
+**``agents`` subcommands:**
+
+- ``agents quickstart`` to install the curated default Agent Assets (Skills, Rules,
+  Constitution) in one step.
+- ``agents add skill / rule / constitution`` to install individual Agent Assets.
+- ``agents remove skill / rule / constitution`` to remove detected Agent Assets.
+
 **``self`` subcommands:**
 
 - ``self version`` to show the current siesta version and check for updates.
 - ``self update`` (or ``self upgrade``) to update siesta to the latest version.
   Automatically detects how siesta was installed (uv tool, pipx, pip) and uses the
   appropriate update command.
-- ``self set-github-pat`` to set your Github Personal Access Token (PAT) to access remote
+- ``self tab-completions install`` to enable shell tab completions (bash/zsh).
+- ``self set-github-pat`` to set your GitHub Personal Access Token (PAT) to access remote
   files.
 - ``self show-deps`` to show the dependencies that will be added to your project to make
   docs.
@@ -155,27 +154,25 @@ Currently ``siesta`` has 3 main subcommands:
 .. note::
 
     By default, ``docs init`` and ``docs update`` use locally bundled boilerplate files
-    and do not require a Github Personal Access Token (PAT). Use ``--remote-assets`` to
-    fetch the latest files from Github (requires a PAT, set it with
+    and do not require a GitHub Personal Access Token (PAT). Use ``--remote-assets`` to
+    fetch the latest files from GitHub (requires a PAT, set it with
     ``$ siesta self set-github-pat``).
 
 When running ``$ siesta docs init`` the following happens:
 
-1. Create a ``docs/`` folder (change with ``--path``)
-2. Optionally install dependencies based on an interactive user choice (use ``--deps``
-   to prevent prompt and install dependencies automatically)
-3. Optionally use ``uv`` to install dependencies (use ``--uv`` to use ``uv`` without
-   being asked)
-4. By default, ``siesta`` will install the docs dependencies in the ``dev``
-   dependencies. Use ``--as-main`` to install them as main dependencies.
-5. ``siesta`` finally prompts the user for the project name (default: current directory
-   name) and the project's URL (default: ``https`` version of the current ``git`` remote
-   URL)
+1. Create a ``docs/`` folder (change with ``--path``).
+2. Optionally install dependencies (use ``--deps`` / ``--no-deps`` to skip the prompt).
+3. When ``uv.lock`` is found, ``uv add --dev`` is used; pass ``--uv`` / ``--no-uv`` to
+   override.
+4. By default, docs dependencies go into dev. Use ``--as-main-deps`` to install them as
+   main dependencies.
+5. ``siesta`` prompts for the project name (default: current directory name) and the
+   project's URL (default: ``https`` version of the current ``git`` remote URL).
 
 .. warning::
 
-    ``siesta`` will abort if the target folder already exists. Use ``--overwrite`` to
-    delete the folder if it exists before setting up the documentation.
+    ``siesta`` aborts if the target folder already exists. Use ``--overwrite`` to
+    overwrite, or ``--backup`` to back up before overwriting.
 
 """
 

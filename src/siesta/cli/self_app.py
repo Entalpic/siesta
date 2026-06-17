@@ -32,7 +32,8 @@ self_app = App(
         """
         Manage siesta itself and configure settings.
 
-        Includes version checking, updates, GitHub PAT configuration, and dependency info.
+        Includes version checking, updates, tab completions, GitHub PAT configuration,
+        and dependency info.
 
         """.strip(),
     ),
@@ -222,7 +223,7 @@ def set_github_pat():
     """
     Store a GitHub Personal Access Token (PAT) in your keyring.
 
-    A Github PAT is only required when using the ``--remote-assets`` flag with commands
+    A GitHub PAT is only required when using the ``--remote-assets`` flag with commands
     like ``siesta docs init``, ``siesta docs update``, or ``siesta project quickstart``
     to fetch the latest boilerplate files from the remote repository. By default, local
     bundled files are used and no PAT is needed.
@@ -232,7 +233,7 @@ def set_github_pat():
 
     `About GitHub PAT <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#about-personal-access-tokens>`_
 
-    `Creating Github a PAT <https://github.com/settings/personal-access-tokens>`_
+    `Creating a GitHub PAT <https://github.com/settings/personal-access-tokens>`_
 
 
     1. Go to ``Settings > Developer settings > Personal access tokens (fine-grained) >
@@ -308,7 +309,7 @@ def show_github_pat(full: bool = False):
 
 @self_app.command(name="show-deps")
 def show_deps(as_pip: bool = False):
-    """Show the recommended dependencies for the documentation that would be installed with `siesta docs init`.
+    """Show the recommended dependencies that would be installed by ``siesta docs init``.
 
     Parameters
     ----------

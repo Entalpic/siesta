@@ -4,6 +4,7 @@
 Command implementations live in domain modules:
 
 - ``main_app`` — root app wiring and ``main()`` entrypoint
+- ``agents_app`` — Agent Asset install/remove commands
 - ``docs_app`` — documentation commands
 - ``project_app`` — project commands
 - ``self_app`` — self-management and tab-completion commands

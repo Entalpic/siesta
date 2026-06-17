@@ -1,4 +1,7 @@
 .. Copyright 2025 Entalpic
+
+:orphan:
+
 .. _coding conventions:
 
 ########
