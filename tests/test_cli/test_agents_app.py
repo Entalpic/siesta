@@ -556,3 +556,54 @@ class TestQuickstart:
         rule.write_text("old")
         run("agents", "quickstart", "--cursor", "--overwrite")
         assert rule.read_text() != "old"
+
+    def test_quickstart_interactive_selects_by_category(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_yes)
+        checked_defaults: dict[str, list[str] | None] = {}
+
+        def select_subset(
+            message: str, choices: list[str], checked: list[str] | None = None
+        ) -> list[str]:
+            checked_defaults[message] = checked
+            if "Rules" in message:
+                return ["python-docstrings"]
+            if "Skills" in message:
+                return []
+            return choices
+
+        monkeypatch.setattr(logger, "checkbox", select_subset)
+
+        code = run("agents", "quickstart", "-i", "--cursor")
+
+        assert code == 0
+        assert (tmp_path_chdir / "AGENTS.md").exists()
+        assert (tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc").exists()
+        assert not (
+            tmp_path_chdir / ".cursor" / "rules" / "mirror-providers.mdc"
+        ).exists()
+        assert not (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs").exists()
+        assert checked_defaults["Select quickstart Rules to install:"] == [
+            "python-docstrings",
+            "mirror-providers",
+        ]
+        assert checked_defaults["Select quickstart Skills to install:"] == [
+            "grill-with-docs"
+        ]
+
+    def test_quickstart_interactive_empty_selection_is_no_op(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_no)
+        monkeypatch.setattr(
+            logger, "checkbox", lambda _message, _choices, checked=None: []
+        )
+
+        code = run("agents", "quickstart", "-i", "--cursor")
+
+        assert code == 0
+        assert not (tmp_path_chdir / "AGENTS.md").exists()
+        assert not (tmp_path_chdir / ".cursor").exists()

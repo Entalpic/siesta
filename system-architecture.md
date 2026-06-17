@@ -275,7 +275,8 @@ alone would leave `CLAUDE.md` with a broken `@AGENTS.md` import (including
 local `--cursor` runs where both files coexist). All catalog discovery, installed-asset detection, path resolution,
 ``.mdc`` translation, the conflict-aware writer, conservative Constitution
 removal, and the `quickstart.yaml` loader live in `utils/agents`.
-`install_quickstart` validates every name in the **Quickstart Config** against the catalog
+`agents quickstart -i` collects category selections from the **Quickstart Config**
+before Mutation; `install_quickstart` validates every selected name against the catalog
 before any write, then reuses the per-asset installers.
 
 ### `project_app` + `utils/project`

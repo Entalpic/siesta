@@ -597,37 +597,44 @@ class ConstitutionMutation:
         return summary
 
 
-def quickstart_asset_mutations(providers: list[str], scope: str) -> list[Mutation]:
-    """Build mutations for every asset declared in the Quickstart Config."""
-    cfg = load_quickstart()
+def quickstart_asset_mutations(
+    providers: list[str], scope: str, cfg: Mapping[str, object] | None = None
+) -> list[Mutation]:
+    """Build mutations for every selected asset from the Quickstart Config."""
+    if cfg is None:
+        cfg = load_quickstart()
 
-    unknown_skills = [s for s in cfg["skills"] if s not in available_skills()]
+    skills = list(cfg["skills"])
+    rules = list(cfg["rules"])
+    constitution = cfg["constitution"]
+
+    unknown_skills = [s for s in skills if s not in available_skills()]
     if unknown_skills:
         logger.abort(
             f"Quickstart Config references unknown skill(s): {unknown_skills}. "
             f"Available: {available_skills()}"
         )
 
-    unknown_rules = [r for r in cfg["rules"] if r not in available_rules()]
+    unknown_rules = [r for r in rules if r not in available_rules()]
     if unknown_rules:
         logger.abort(
             f"Quickstart Config references unknown rule(s): {unknown_rules}. "
             f"Available: {available_rules()}"
         )
 
-    if cfg["constitution"] and cfg["constitution"] not in available_constitutions():
+    if constitution and constitution not in available_constitutions():
         logger.abort(
-            f"Quickstart Config references unknown constitution: {cfg['constitution']!r}. "
+            f"Quickstart Config references unknown constitution: {constitution!r}. "
             f"Available: {available_constitutions()}"
         )
 
     mutations: list[Mutation] = []
-    for name in cfg["skills"]:
+    for name in skills:
         mutations.append(SkillMutation(name, providers, scope))
-    for name in cfg["rules"]:
+    for name in rules:
         mutations.append(RuleMutation(name, providers, scope))
-    if cfg["constitution"]:
-        mutations.append(ConstitutionMutation(cfg["constitution"], providers, scope))
+    if constitution:
+        mutations.append(ConstitutionMutation(str(constitution), providers, scope))
     return mutations
 
 
@@ -637,10 +644,12 @@ def install_quickstart(
     *,
     overwrite: bool | None = None,
     backup: bool = False,
+    cfg: Mapping[str, object] | None = None,
 ) -> OperationSummary:
     """Install all Agent Assets declared in the Quickstart Config."""
+    mutations = quickstart_asset_mutations(providers, scope, cfg)
     return run_mutations(
-        quickstart_asset_mutations(providers, scope),
+        mutations,
         overwrite=overwrite,
         backup=backup,
     )

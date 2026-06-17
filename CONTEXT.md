@@ -96,7 +96,7 @@ Whether an Agent Asset is installed for the current repository (local) or the us
 _Avoid_: location, target
 
 **Quickstart Config**:
-The bundled declaration (`agents_assets/quickstart.yaml`) listing which Agent Assets `siesta agents quickstart` installs by default — the curated default subset of the Agent Asset Catalog. It is NOT an Agent Asset itself, so the "avoid: config" guidance on **Agent Asset** still applies to Skills/Rules/Constitutions.
+The bundled declaration (`agents_assets/quickstart.yaml`) listing which Agent Assets `siesta agents quickstart` installs by default, and which curated entries an interactive quickstart may select from — the curated default subset of the Agent Asset Catalog. It is NOT an Agent Asset itself, so the "avoid: config" guidance on **Agent Asset** still applies to Skills/Rules/Constitutions.
 
 ### Security
 
@@ -126,7 +126,7 @@ The rule that branch commits and PR context use `Refs #<num>` for linkage, while
 ## Relationships
 
 - An **Agent Asset Catalog** contains **Skills**, **Rules**, and **Constitutions**; it is the only install source (bundled, no network).
-- The **Quickstart Config** selects a subset of the **Agent Asset Catalog**; running `siesta agents quickstart` is equivalent to running the individual `agents add` commands for each listed asset.
+- The **Quickstart Config** selects a subset of the **Agent Asset Catalog**; by default, running `siesta agents quickstart` is equivalent to running the individual `agents add` commands for each listed asset.
 - A **Constitution** is rendered as `AGENTS.md` (source of truth) plus, for the Claude **Provider**, a `CLAUDE.md` `@AGENTS.md` stub.
 - A **Rule** has exactly one canonical `.mdc` source and is **Provider Mirrored** to a translated Claude `.md`.
 - Every Agent Asset install resolves to a **Provider** × **Asset Scope** destination.

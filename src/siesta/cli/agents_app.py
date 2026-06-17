@@ -25,6 +25,7 @@ from siesta.utils.agents import (
     detect_installed_rules,
     detect_installed_skills,
     install_quickstart,
+    load_quickstart,
     remove_constitution,
     remove_rule,
     remove_skill,
@@ -685,6 +686,47 @@ def _group_confirmed_providers(
 # ---------------------------------------------------------------------------
 
 
+def _collect_quickstart_selection(cfg: dict) -> dict[str, object]:
+    """Collect interactive category selections for ``agents quickstart``."""
+    if not sys.stdin.isatty():
+        logger.abort("Interactive quickstart selection requires a terminal (no TTY).")
+
+    constitution = cfg["constitution"]
+    selected_constitution = (
+        constitution
+        if constitution
+        and logger.confirm(
+            f"Install quickstart Constitution {constitution!r}?",
+            default=True,
+        )
+        else None
+    )
+    selected_rules = (
+        logger.checkbox(
+            "Select quickstart Rules to install:",
+            list(cfg["rules"]),
+            checked=list(cfg["rules"]),
+        )
+        if cfg["rules"]
+        else []
+    )
+    selected_skills = (
+        logger.checkbox(
+            "Select quickstart Skills to install:",
+            list(cfg["skills"]),
+            checked=list(cfg["skills"]),
+        )
+        if cfg["skills"]
+        else []
+    )
+    selected = {
+        "skills": selected_skills,
+        "rules": selected_rules,
+        "constitution": selected_constitution,
+    }
+    return selected
+
+
 @agents_app.command(name="quickstart")
 def quickstart(
     *,
@@ -738,11 +780,13 @@ def quickstart(
     backup : bool, optional
         Back up existing targets before overwriting.
     interactive : bool, optional
-        Reserved; quickstart uses the unified conflict resolver.
+        Select which curated Constitution, Rules, and Skills to install.
     """
-    del interactive
     scope = resolve_scope(local, global_)
     providers = resolve_providers(cursor, claude, both)
 
-    summary = install_quickstart(providers, scope, overwrite=overwrite, backup=backup)
+    cfg = _collect_quickstart_selection(load_quickstart()) if interactive else None
+    summary = install_quickstart(
+        providers, scope, overwrite=overwrite, backup=backup, cfg=cfg
+    )
     render_summary(summary)
