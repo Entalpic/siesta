@@ -92,11 +92,11 @@ class TestAddSkill:
         run("agents", "add", "skill", "grill-with-docs", "--cursor")
         assert (dest / "SKILL.md").read_text() == "mine"
 
-    def test_force_overwrites_existing(self, tmp_path_chdir):
+    def test_overwrite_overwrites_existing(self, tmp_path_chdir):
         dest = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs"
         dest.mkdir(parents=True)
         (dest / "SKILL.md").write_text("old")
-        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--force")
+        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--overwrite")
         assert (dest / "SKILL.md").read_text() != "old"
 
     def test_backup_creates_bak(self, tmp_path_chdir):
@@ -109,7 +109,7 @@ class TestAddSkill:
             "skill",
             "grill-with-docs",
             "--cursor",
-            "--force",
+            "--overwrite",
             "--backup",
         )
         bak = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs.bak"
@@ -177,11 +177,11 @@ class TestAddRule:
         run("agents", "add", "rule", "python-docstrings", "--cursor")
         assert dest.read_text() == "mine"
 
-    def test_force_overwrites(self, tmp_path_chdir):
+    def test_overwrite_overwrites(self, tmp_path_chdir):
         dest = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
         dest.parent.mkdir(parents=True)
         dest.write_text("old")
-        run("agents", "add", "rule", "python-docstrings", "--cursor", "--force")
+        run("agents", "add", "rule", "python-docstrings", "--cursor", "--overwrite")
         assert dest.read_text() != "old"
 
 
@@ -227,9 +227,9 @@ class TestAddConstitution:
         run("agents", "add", "constitution", "--cursor")
         assert (tmp_path_chdir / "AGENTS.md").read_text() == "mine"
 
-    def test_force_overwrites_agents(self, tmp_path_chdir):
+    def test_overwrite_overwrites_agents(self, tmp_path_chdir):
         (tmp_path_chdir / "AGENTS.md").write_text("old")
-        run("agents", "add", "constitution", "--cursor", "--force")
+        run("agents", "add", "constitution", "--cursor", "--overwrite")
         assert (tmp_path_chdir / "AGENTS.md").read_text() != "old"
 
     def test_claude_md_import_already_present_no_duplicate(self, tmp_path_chdir):
@@ -238,16 +238,24 @@ class TestAddConstitution:
         content = (tmp_path_chdir / "CLAUDE.md").read_text()
         assert content.count(IMPORT_LINE) == 1
 
-    def test_force_prepends_import_to_existing_claude_md(self, tmp_path_chdir):
+    def test_overwrite_prepends_import_to_existing_claude_md(self, tmp_path_chdir):
         (tmp_path_chdir / "CLAUDE.md").write_text("existing content")
-        run("agents", "add", "constitution", "--claude", "--force")
+        run("agents", "add", "constitution", "--claude", "--overwrite")
         content = (tmp_path_chdir / "CLAUDE.md").read_text()
         assert content.startswith(IMPORT_LINE)
         assert "existing content" in content
 
+    def test_claude_never_overwritten(self, tmp_path_chdir):
+        original = "user-authored content stays"
+        (tmp_path_chdir / "CLAUDE.md").write_text(original)
+        run("agents", "add", "constitution", "--claude", "--local", "--overwrite")
+        content = (tmp_path_chdir / "CLAUDE.md").read_text()
+        assert content.startswith(IMPORT_LINE)
+        assert original in content
+
     def test_backup_flag_preserves_old_agents(self, tmp_path_chdir):
         (tmp_path_chdir / "AGENTS.md").write_text("old agents")
-        run("agents", "add", "constitution", "--cursor", "--force", "--backup")
+        run("agents", "add", "constitution", "--cursor", "--overwrite", "--backup")
         assert (tmp_path_chdir / "AGENTS.md.bak").read_text() == "old agents"
 
     def test_local_and_global_abort(self, tmp_path_chdir):
@@ -442,9 +450,9 @@ class TestQuickstart:
         ).exists()
         assert not (tmp_path_chdir / ".claude" / "skills").exists()
 
-    def test_quickstart_force_overwrites(self, tmp_path_chdir):
+    def test_quickstart_overwrite(self, tmp_path_chdir):
         rule = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
         rule.parent.mkdir(parents=True)
         rule.write_text("old")
-        run("agents", "quickstart", "--cursor", "--force")
+        run("agents", "quickstart", "--cursor", "--overwrite")
         assert rule.read_text() != "old"

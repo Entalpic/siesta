@@ -68,6 +68,25 @@ def test_init_docs_with_overwrite(
     assert (docs_dir / "source" / "conf.py").exists()
 
 
+def test_init_docs_with_backup(
+    temp_project_with_git_and_remote, monkeypatch, capture_output
+):
+    """Test that --backup renames existing docs to docs.bak before init."""
+    monkeypatch.chdir(temp_project_with_git_and_remote)
+    docs_dir = temp_project_with_git_and_remote / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "marker.txt").write_text("original content")
+
+    with capture_output():
+        try:
+            app(["docs", "init", "--overwrite", "--backup"])
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert (temp_project_with_git_and_remote / "docs.bak" / "marker.txt").exists()
+    assert (docs_dir / "source" / "conf.py").exists()
+
+
 def test_init_docs_package_discovery(
     temp_project_with_git_and_remote, monkeypatch, capture_output
 ):

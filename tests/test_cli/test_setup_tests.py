@@ -1,11 +1,11 @@
 # Copyright 2025 Entalpic
 import os
+import sys
 from pathlib import Path
 from subprocess import run
 
 import pytest
 
-import siesta.cli.project_app as cli
 from siesta.cli.main_app import app
 
 
@@ -92,27 +92,34 @@ def test_setup_tests_without_actions(existing_uv_project, capture_output):
     assert not (existing_uv_project / ".github").exists()
 
 
-def test_setup_tests_skips_existing_tests_directory(
+def test_setup_tests_aborts_on_existing_without_overwrite(
+    existing_uv_project, capture_output, monkeypatch
+):
+    """Non-TTY setup-tests aborts when test_import.py already exists."""
+    (existing_uv_project / "tests").mkdir(exist_ok=True)
+    (existing_uv_project / "tests" / "test_import.py").write_text("# existing")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+
+    with pytest.raises(SystemExit):
+        with capture_output():
+            app(["project", "setup-tests"])
+
+
+def test_setup_tests_overwrites_existing_test_import(
     existing_uv_project, capture_output
 ):
-    """Test that setup-tests warns and skips if tests directory already exists."""
-    # Create tests directory first
-    (existing_uv_project / "tests").mkdir()
-    (existing_uv_project / "tests" / "existing_test.py").write_text("# existing test")
+    """setup-tests --overwrite rewrites tests/test_import.py."""
+    (existing_uv_project / "tests").mkdir(exist_ok=True)
+    (existing_uv_project / "tests" / "test_import.py").write_text("# stale")
 
-    with capture_output() as output:
+    with capture_output():
         try:
-            app(["project", "setup-tests"])
+            app(["project", "setup-tests", "--overwrite"])
         except SystemExit as e:
             assert e.code == 0
 
-    output_text = output.getvalue()
-    assert "Tests directory already exists" in output_text
-
-    # Check existing test file is preserved
-    assert (existing_uv_project / "tests" / "existing_test.py").exists()
-    # Check no new test file was created
-    assert not (existing_uv_project / "tests" / "test_import.py").exists()
+    content = (existing_uv_project / "tests" / "test_import.py").read_text()
+    assert "importlib.import_module('existing_project')" in content
 
 
 def test_setup_tests_respects_no_actions(existing_uv_project, capture_output):
@@ -202,19 +209,15 @@ def test_setup_tests_collects_decisions_before_mutations(
         lambda _msg: events.append("confirm") or next(answers),
     )
     monkeypatch.setattr(
-        cli,
-        "run_command",
+        "siesta.utils.common.run_command",
         lambda cmd, **_kwargs: events.append(f"run:{' '.join(cmd)}") or True,
     )
     monkeypatch.setattr(
-        cli,
-        "write_tests_infra",
-        lambda *_args, **_kwargs: events.append("write_tests_infra"),
-    )
-    monkeypatch.setattr(
-        cli,
-        "write_test_actions_config",
-        lambda *_args, **_kwargs: events.append("write_test_actions_config"),
+        "siesta.cli.project_app.run_mutations",
+        lambda *_args, **_kwargs: events.append("run_mutations")
+        or __import__(
+            "siesta.utils.conflicts", fromlist=["OperationSummary"]
+        ).OperationSummary(),
     )
 
     try:
@@ -226,6 +229,7 @@ def test_setup_tests_collects_decisions_before_mutations(
     confirm_indices = [i for i, event in enumerate(events) if event == "confirm"]
     assert confirm_indices
     assert max(confirm_indices) < first_mutation
-    assert events[first_mutation].startswith("run:")
-    assert "write_tests_infra" in events
-    assert "write_test_actions_config" in events
+    assert events[first_mutation] in ("run_mutations",) or events[
+        first_mutation
+    ].startswith("run:")
+    assert "run_mutations" in events

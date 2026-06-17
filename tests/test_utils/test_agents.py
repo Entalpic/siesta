@@ -11,6 +11,9 @@ import pytest
 from siesta.utils.agents import (
     DEFAULT_CONSTITUTION,
     IMPORT_LINE,
+    ConstitutionMutation,
+    RuleMutation,
+    SkillMutation,
     _display_path,
     _split_frontmatter,
     _split_globs,
@@ -23,10 +26,7 @@ from siesta.utils.agents import (
     constitution_paths,
     detect_installed_rules,
     detect_installed_skills,
-    install_constitution,
     install_quickstart,
-    install_rule,
-    install_skill,
     load_quickstart,
     mdc_to_claude,
     remove_constitution,
@@ -41,10 +41,9 @@ from siesta.utils.agents import (
     rule_target,
     scope_display_label,
     skill_target,
-    write_dir,
-    write_file,
 )
 from siesta.utils.common import logger
+from siesta.utils.conflicts import Resolution, run_mutations, write_path
 
 # ---------------------------------------------------------------------------
 # Catalog discovery
@@ -338,44 +337,42 @@ class TestResolveSelection:
 
 
 # ---------------------------------------------------------------------------
-# Conflict-aware writers
+# Conflict-aware writers (via substrate)
 # ---------------------------------------------------------------------------
 
 
-class TestWriteFile:
+class TestWritePath:
     def test_writes_new_file(self, tmp_path):
         src = tmp_path / "src.txt"
         dest = tmp_path / "dest" / "out.txt"
         src.write_text("hello")
-        action = write_file(src, dest)
-        assert action == "write"
+        action = write_path(src, dest, Resolution.OVERWRITE)
+        assert action is Resolution.OVERWRITE
         assert dest.read_text() == "hello"
 
-    def test_skips_existing_non_interactive(self, tmp_path):
+    def test_skips_existing(self, tmp_path):
         dest = tmp_path / "out.txt"
         dest.write_text("original")
         src = tmp_path / "src.txt"
         src.write_text("new")
-        action = write_file(src, dest, force=False, interactive=False)
-        assert action == "skip"
+        action = write_path(src, dest, Resolution.SKIP)
+        assert action is Resolution.SKIP
         assert dest.read_text() == "original"
 
-    def test_force_overwrites(self, tmp_path):
+    def test_overwrite_existing(self, tmp_path):
         dest = tmp_path / "out.txt"
         dest.write_text("original")
         src = tmp_path / "src.txt"
         src.write_text("new")
-        action = write_file(src, dest, force=True)
-        assert action == "overwrite"
+        write_path(src, dest, Resolution.OVERWRITE)
         assert dest.read_text() == "new"
 
-    def test_force_backup_creates_bak(self, tmp_path):
+    def test_backup_creates_bak(self, tmp_path):
         dest = tmp_path / "out.txt"
         dest.write_text("original")
         src = tmp_path / "src.txt"
         src.write_text("new")
-        action = write_file(src, dest, force=True, backup=True)
-        assert action == "backup_write"
+        write_path(src, dest, Resolution.BACKUP)
         assert dest.read_text() == "new"
         assert (tmp_path / "out.txt.bak").read_text() == "original"
 
@@ -383,40 +380,27 @@ class TestWriteFile:
         src = tmp_path / "src.txt"
         src.write_text("ignored")
         dest = tmp_path / "out.txt"
-        write_file(src, dest, content_override="custom content")
+        write_path(src, dest, Resolution.OVERWRITE, content_override="custom content")
         assert dest.read_text() == "custom content"
 
-
-class TestWriteDir:
-    def test_copies_directory(self, tmp_path):
+    def test_overwrite_directory(self, tmp_path):
         src = tmp_path / "src_dir"
         src.mkdir()
         (src / "file.txt").write_text("data")
         dest = tmp_path / "dest_dir"
-        action = write_dir(src, dest)
-        assert action == "write"
-        assert (dest / "file.txt").read_text() == "data"
-
-    def test_skips_existing_non_interactive(self, tmp_path):
-        src = tmp_path / "src_dir"
-        src.mkdir()
-        (src / "file.txt").write_text("new")
-        dest = tmp_path / "dest_dir"
         dest.mkdir()
         (dest / "old.txt").write_text("old")
-        action = write_dir(src, dest, force=False, interactive=False)
-        assert action == "skip"
-        assert (dest / "old.txt").exists()
+        write_path(src, dest, Resolution.OVERWRITE)
+        assert (dest / "file.txt").read_text() == "data"
 
-    def test_force_backup_renames(self, tmp_path):
+    def test_backup_directory(self, tmp_path):
         src = tmp_path / "src_dir"
         src.mkdir()
         (src / "new.txt").write_text("new")
         dest = tmp_path / "dest_dir"
         dest.mkdir()
         (dest / "old.txt").write_text("old")
-        action = write_dir(src, dest, force=True, backup=True)
-        assert action == "backup_write"
+        write_path(src, dest, Resolution.BACKUP)
         assert (dest / "new.txt").exists()
         bak = tmp_path / "dest_dir.bak"
         assert bak.is_dir()
@@ -424,23 +408,22 @@ class TestWriteDir:
 
 
 # ---------------------------------------------------------------------------
-# install_skill
+# SkillMutation
 # ---------------------------------------------------------------------------
 
 
-class TestInstallSkill:
+class TestSkillMutation:
     def test_installs_for_both_providers(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        summary = install_skill("grill-with-docs", ["cursor", "claude"], "local")
-        assert summary["written"] == [
-            str(Path(".cursor") / "skills" / "grill-with-docs"),
-            str(Path(".claude") / "skills" / "grill-with-docs"),
-        ]
+        summary = run_mutations(
+            [SkillMutation("grill-with-docs", ["cursor", "claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
+        assert str(Path(".cursor") / "skills" / "grill-with-docs") in summary.written
+        assert str(Path(".claude") / "skills" / "grill-with-docs") in summary.written
         assert (
             tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
-        ).exists()
-        assert (
-            tmp_path / ".claude" / "skills" / "grill-with-docs" / "SKILL.md"
         ).exists()
 
     def test_skips_existing_cursor(self, tmp_path, monkeypatch):
@@ -448,109 +431,154 @@ class TestInstallSkill:
         dest = tmp_path / ".cursor" / "skills" / "grill-with-docs"
         dest.mkdir(parents=True)
         (dest / "SKILL.md").write_text("existing")
-        summary = install_skill("grill-with-docs", ["cursor"], "local")
-        assert str(Path(".cursor") / "skills" / "grill-with-docs") in summary["skipped"]
+        summary = run_mutations(
+            [SkillMutation("grill-with-docs", ["cursor"], "local")],
+            overwrite=False,
+            backup=False,
+        )
+        assert str(Path(".cursor") / "skills" / "grill-with-docs") in summary.skipped
         assert (dest / "SKILL.md").read_text() == "existing"
 
 
 # ---------------------------------------------------------------------------
-# install_rule
+# RuleMutation
 # ---------------------------------------------------------------------------
 
 
-class TestInstallRule:
+class TestRuleMutation:
     def test_cursor_gets_mdc(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        summary = install_rule("python-docstrings", ["cursor"], "local")
+        summary = run_mutations(
+            [RuleMutation("python-docstrings", ["cursor"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         dest = tmp_path / ".cursor" / "rules" / "python-docstrings.mdc"
         assert dest.exists()
-        assert summary["written"] == [
-            str(Path(".cursor") / "rules" / "python-docstrings.mdc")
-        ]
-        content = dest.read_text()
-        assert "alwaysApply" in content
+        assert (
+            str(Path(".cursor") / "rules" / "python-docstrings.mdc") in summary.written
+        )
+        assert "alwaysApply" in dest.read_text()
 
     def test_claude_gets_translated_md(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_rule("python-docstrings", ["claude"], "local")
+        run_mutations(
+            [RuleMutation("python-docstrings", ["claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         dest = tmp_path / ".claude" / "rules" / "python-docstrings.md"
         assert dest.exists()
-        content = dest.read_text()
-        assert "paths:" in content
-        assert "alwaysApply" not in content
+        assert "paths:" in dest.read_text()
 
     def test_cursor_verbatim_has_alwaysapply(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_rule("mirror-providers", ["cursor"], "local")
+        run_mutations(
+            [RuleMutation("mirror-providers", ["cursor"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         dest = tmp_path / ".cursor" / "rules" / "mirror-providers.mdc"
         assert "alwaysApply" in dest.read_text()
 
     def test_installs_globally(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        install_rule("python-docstrings", ["claude"], "global")
+        run_mutations(
+            [RuleMutation("python-docstrings", ["claude"], "global")],
+            overwrite=True,
+            backup=False,
+        )
         dest = tmp_path / ".claude" / "rules" / "python-docstrings.md"
         assert dest.exists()
 
 
 # ---------------------------------------------------------------------------
-# install_constitution
+# ConstitutionMutation
 # ---------------------------------------------------------------------------
 
 
-class TestInstallConstitution:
+class TestConstitutionMutation:
     def test_both_providers_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        summary = install_constitution(
-            DEFAULT_CONSTITUTION, ["cursor", "claude"], "local"
+        summary = run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")],
+            overwrite=True,
+            backup=False,
         )
         assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "CLAUDE.md").exists()
         assert (tmp_path / "CLAUDE.md").read_text().strip() == IMPORT_LINE
-        assert summary["written"] == ["AGENTS.md", "CLAUDE.md"]
+        assert "AGENTS.md" in summary.written
 
     def test_cursor_only_writes_agents_md(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_constitution(DEFAULT_CONSTITUTION, ["cursor"], "local")
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         assert (tmp_path / "AGENTS.md").exists()
         assert not (tmp_path / "CLAUDE.md").exists()
 
     def test_claude_only_writes_both_files(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_constitution(DEFAULT_CONSTITUTION, ["claude"], "local")
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "CLAUDE.md").exists()
 
     def test_global_cursor_only_warns_and_skips(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        summary = install_constitution(DEFAULT_CONSTITUTION, ["cursor"], "global")
+        summary = run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor"], "global")],
+            overwrite=True,
+            backup=False,
+        )
         assert not (tmp_path / "AGENTS.md").exists()
-        assert summary["written"] == []
+        assert summary.written == []
 
     def test_global_claude_writes_to_dot_claude(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        install_constitution(DEFAULT_CONSTITUTION, ["claude"], "global")
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["claude"], "global")],
+            overwrite=True,
+            backup=False,
+        )
         assert (tmp_path / ".claude" / "AGENTS.md").exists()
         assert (tmp_path / ".claude" / "CLAUDE.md").exists()
 
     def test_existing_agents_md_skipped_by_default(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "AGENTS.md").write_text("my existing agents")
-        summary = install_constitution(
-            DEFAULT_CONSTITUTION, ["cursor"], "local", force=False
+        summary = run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor"], "local")],
+            overwrite=False,
+            backup=False,
         )
-        assert "AGENTS.md" in str(summary["skipped"])
+        assert "AGENTS.md" in summary.skipped
         assert (tmp_path / "AGENTS.md").read_text() == "my existing agents"
 
-    def test_existing_agents_md_overwritten_with_force(self, tmp_path, monkeypatch):
+    def test_existing_agents_md_overwritten(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "AGENTS.md").write_text("old")
-        install_constitution(DEFAULT_CONSTITUTION, ["cursor"], "local", force=True)
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         assert (tmp_path / "AGENTS.md").read_text() != "old"
 
     def test_existing_claude_md_already_has_import_no_op(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "CLAUDE.md").write_text(f"{IMPORT_LINE}\n\nExtra content")
-        install_constitution(DEFAULT_CONSTITUTION, ["claude"], "local")
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         content = (tmp_path / "CLAUDE.md").read_text()
         assert content.count(IMPORT_LINE) == 1
 
@@ -559,30 +587,35 @@ class TestInstallConstitution:
     ):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "CLAUDE.md").write_text("existing content, no import")
-        install_constitution(
-            DEFAULT_CONSTITUTION, ["claude"], "local", force=False, interactive=False
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["claude"], "local")],
+            overwrite=False,
+            backup=False,
         )
-        content = (tmp_path / "CLAUDE.md").read_text()
-        assert IMPORT_LINE not in content
+        assert IMPORT_LINE not in (tmp_path / "CLAUDE.md").read_text()
 
-    def test_existing_claude_md_import_prepended_with_force(
+    def test_existing_claude_md_import_prepended_with_overwrite(
         self, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "CLAUDE.md").write_text("existing content")
-        summary = install_constitution(
-            DEFAULT_CONSTITUTION, ["claude"], "local", force=True, interactive=False
+        summary = run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["claude"], "local")],
+            overwrite=True,
+            backup=False,
         )
         content = (tmp_path / "CLAUDE.md").read_text()
         assert content.startswith(IMPORT_LINE)
         assert "existing content" in content
-        assert "CLAUDE.md (import prepended)" in summary["written"]
+        assert "CLAUDE.md" in summary.merged
 
     def test_agents_md_backed_up_with_backup_flag(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "AGENTS.md").write_text("old agents")
-        install_constitution(
-            DEFAULT_CONSTITUTION, ["cursor"], "local", force=True, backup=True
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor"], "local")],
+            overwrite=True,
+            backup=True,
         )
         assert (tmp_path / "AGENTS.md.bak").read_text() == "old agents"
         assert (tmp_path / "AGENTS.md").exists()
@@ -605,7 +638,7 @@ def test_load_quickstart_shape():
 class TestInstallQuickstart:
     def test_installs_all_kinds_both_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_quickstart(["cursor", "claude"], "local")
+        install_quickstart(["cursor", "claude"], "local", overwrite=True)
         assert (
             tmp_path / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
         ).exists()
@@ -768,7 +801,7 @@ class TestRemovePath:
         target = tmp_path / "out.txt"
         target.write_text("data")
         action = remove_path(target, backup=True)
-        assert action == "backed_up"
+        assert action is Resolution.BACKUP
         assert not target.exists()
         assert (tmp_path / "out.txt.bak").read_text() == "data"
 
@@ -776,29 +809,40 @@ class TestRemovePath:
 class TestRemoveSkillRule:
     def test_remove_skill(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_skill("grill-with-docs", ["cursor"], "local")
+        run_mutations(
+            [SkillMutation("grill-with-docs", ["cursor"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         dest = tmp_path / ".cursor" / "skills" / "grill-with-docs"
         assert dest.exists()
         summary = remove_skill("grill-with-docs", ["cursor"], "local")
         assert not dest.exists()
-        assert str(Path(".cursor") / "skills" / "grill-with-docs") in summary["removed"]
+        assert str(Path(".cursor") / "skills" / "grill-with-docs") in summary.removed
 
     def test_remove_rule(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_rule("python-docstrings", ["claude"], "local")
+        run_mutations(
+            [RuleMutation("python-docstrings", ["claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         dest = tmp_path / ".claude" / "rules" / "python-docstrings.md"
         summary = remove_rule("python-docstrings", ["claude"], "local")
         assert not dest.exists()
         assert (
-            str(Path(".claude") / "rules" / "python-docstrings.md")
-            in summary["removed"]
+            str(Path(".claude") / "rules" / "python-docstrings.md") in summary.removed
         )
 
 
 class TestRemoveConstitutionFile:
     def test_removes_catalog_agents_md(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_constitution(DEFAULT_CONSTITUTION, ["cursor"], "local")
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         agents = tmp_path / "AGENTS.md"
         action, _ = remove_constitution_file(agents)
         assert action == "removed"
@@ -844,7 +888,11 @@ class TestRemoveConstitutionFile:
 class TestRemoveConstitution:
     def test_confirmed_local_removal(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        install_constitution(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
         summary = remove_constitution(
             ["cursor", "claude"],
             "local",
@@ -853,17 +901,16 @@ class TestRemoveConstitution:
         )
         assert not (tmp_path / "AGENTS.md").exists()
         assert not (tmp_path / "CLAUDE.md").exists()
-        assert "AGENTS.md" in summary["removed"]
-        assert "CLAUDE.md" in summary["removed"]
+        assert "AGENTS.md" in summary.removed
+        assert "CLAUDE.md" in summary.removed
 
     def test_stripped_claude_md_recorded_as_modified(self, tmp_path, monkeypatch):
-        # An edited-but-kept CLAUDE.md must not be reported as "removed".
         monkeypatch.chdir(tmp_path)
         (tmp_path / "CLAUDE.md").write_text(f"{IMPORT_LINE}\n\nbody")
         summary = remove_constitution(["claude"], "local", confirmed_claude=True)
         assert (tmp_path / "CLAUDE.md").exists()
-        assert summary["removed"] == []
-        assert any("CLAUDE.md" in entry for entry in summary["modified"])
+        assert summary.removed == []
+        assert any("CLAUDE.md" in entry for entry in summary.written)
 
     def test_constitution_paths_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
