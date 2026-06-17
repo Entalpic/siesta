@@ -6,7 +6,6 @@ import platform
 import subprocess
 import time
 from pathlib import Path
-from shutil import rmtree
 from subprocess import CompletedProcess
 from textwrap import dedent
 from typing import Annotated, cast
@@ -23,12 +22,10 @@ from siesta.utils.common import (
 )
 from siesta.utils.config import CLI_DEFAULTS
 from siesta.utils.conflicts import (
-    Conflict,
     OperationSummary,
-    Resolution,
     apply_backup,
     render_summary,
-    resolve_conflict,
+    run_mutations,
 )
 from siesta.utils.docs import (
     AutoBuildDocs,
@@ -40,6 +37,7 @@ from siesta.utils.docs import (
     update_conf_py,
     write_rtd_config,
 )
+from siesta.utils.project import InitDocsMutation
 
 docs_app = App(
     name="docs",
@@ -154,34 +152,8 @@ def init_docs(
     # Where the docs will be stored, typically `$CWD/docs`
     resolved_path = resolve_path(path)
     logger.info(f"Initializing docs at path: [r]{resolved_path}[/r]")
-    if resolved_path.exists():
-        resolution = resolve_conflict(
-            Conflict(
-                key="docs",
-                name=f"docs at {resolved_path}",
-                options=frozenset(
-                    {
-                        Resolution.SKIP,
-                        Resolution.OVERWRITE,
-                        Resolution.BACKUP,
-                        Resolution.ABORT,
-                    }
-                ),
-            ),
-            overwrite=overwrite,
-            backup=backup,
-        )
-        if resolution is Resolution.ABORT:
-            logger.abort("Aborted.")
-        if resolution is Resolution.SKIP:
-            logger.warning(f"Path already exists: {resolved_path}")
-            logger.warning("Use --overwrite to overwrite.")
-            logger.abort("Aborting.", exit=1)
-        if resolution is Resolution.BACKUP:
-            apply_backup(resolved_path)
-        elif resolution is Resolution.OVERWRITE:
-            rmtree(resolved_path)
 
+    # Prompt collection phase: resolve all feature decisions before any Mutation.
     if deps is None:
         deps = logger.confirm("Would you like to install recommended dependencies?")
 
@@ -203,7 +175,68 @@ def init_docs(
                     "uv.lock not found. Skipping uv dependencies, installing with pip."
                 )
 
-    # Execution phase: perform mutations only after all decisions are collected.
+    # Execution phase: the docs-folder Conflict is detected, resolved, and applied
+    # through the unified mutation driver — exactly like the other write commands.
+    summary = run_mutations(
+        [
+            InitDocsMutation(
+                path,
+                bool(as_main_deps),
+                deps,
+                with_uv,
+                interactive,
+                branch,
+                contents,
+                remote_assets,
+                project_name,
+            )
+        ],
+        overwrite=overwrite,
+        backup=backup,
+    )
+    render_summary(summary)
+
+
+def _execute_docs_init(
+    *,
+    path: str,
+    as_main_deps: bool,
+    deps: bool,
+    with_uv: bool,
+    interactive: bool,
+    branch: str,
+    contents: str,
+    remote_assets: bool,
+    project_name: str | None,
+) -> None:
+    """Scaffold the docs folder for :class:`~siesta.utils.project.InitDocsMutation`.
+
+    Runs only after the docs-folder Conflict has been resolved and applied by
+    ``run_mutations``; it owns no conflict handling and assumes the destination is
+    ready to be written.
+
+    Parameters
+    ----------
+    path : str
+        Path for the docs folder.
+    as_main_deps : bool
+        Install docs dependencies as main (not dev) dependencies.
+    deps : bool
+        Install recommended docs dependencies.
+    with_uv : bool
+        Use ``uv add`` to install dependencies.
+    interactive : bool
+        Prompt for unspecified placeholders while writing ``conf.py``.
+    branch : str
+        Branch to fetch static files from when using ``remote_assets``.
+    contents : str
+        Path to the static files in the repository when using ``remote_assets``.
+    remote_assets : bool
+        Fetch boilerplate docs assets from the remote GitHub repository.
+    project_name : str | None
+        The project's name; prompted by ``overwrite_docs_files`` when unset.
+    """
+    resolved_path = resolve_path(path)
     resolved_path.mkdir(parents=True, exist_ok=True)
     logger.success("Docs initialized 📄")
 

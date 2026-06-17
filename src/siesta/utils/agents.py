@@ -432,6 +432,12 @@ def _record_write(summary: OperationSummary, action: Resolution, path: str) -> N
 
 @dataclass
 class SkillMutation:
+    """Install one Skill into each target Provider directory.
+
+    Built by ``agents add skill`` and ``agents quickstart``. Treats an existing
+    destination for any Provider as a Conflict.
+    """
+
     name: str
     providers: list[str]
     scope: str
@@ -467,6 +473,13 @@ class SkillMutation:
 
 @dataclass
 class RuleMutation:
+    """Install one Rule into each target Provider.
+
+    Built by ``agents add rule`` and ``agents quickstart``. The canonical ``.mdc`` source
+    is translated to the Claude format for the Claude Provider. Treats an existing
+    destination for any Provider as a Conflict.
+    """
+
     name: str
     providers: list[str]
     scope: str
@@ -504,6 +517,13 @@ class RuleMutation:
 
 @dataclass
 class ConstitutionMutation:
+    """Install the Constitution: ``AGENTS.md`` plus the Claude ``CLAUDE.md`` import stub.
+
+    Built by ``agents add constitution`` and ``agents quickstart``. Treats an existing
+    ``AGENTS.md`` as a Conflict; an existing ``CLAUDE.md`` without the import line may be
+    skipped, merged (prepend the import), or aborted.
+    """
+
     name: str
     providers: list[str]
     scope: str

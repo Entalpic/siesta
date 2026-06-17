@@ -371,7 +371,7 @@ def test_quickstart_interactive_respects_explicit_docs_path(
 ):
     """Explicit docs path skips the interactive docs path prompt."""
     prompted = False
-    init_docs_kwargs = {}
+    exec_kwargs = {}
 
     def fake_prompt(_message, default=None):
         nonlocal prompted
@@ -391,8 +391,8 @@ def test_quickstart_interactive_respects_explicit_docs_path(
         "siesta.utils.common.run_command", lambda *_args, **_kwargs: True
     )
     monkeypatch.setattr(
-        "siesta.cli.docs_app.init_docs",
-        lambda **kwargs: init_docs_kwargs.update(kwargs),
+        "siesta.cli.docs_app._execute_docs_init",
+        lambda **kwargs: exec_kwargs.update(kwargs),
     )
     monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
 
@@ -412,14 +412,14 @@ def test_quickstart_interactive_respects_explicit_docs_path(
         assert e.code == 0
 
     assert prompted is False
-    assert init_docs_kwargs["path"] == "custom-docs"
+    assert exec_kwargs["path"] == "custom-docs"
 
 
 def test_quickstart_fresh_project_docs_uv_prompt_collection(
     tmp_path_chdir, monkeypatch
 ):
     """docs_with_uv is resolved in prompt collection (before uv init runs)."""
-    init_docs_kwargs = {}
+    exec_kwargs = {}
 
     class _Result:
         stdout = "Python 3.12.1\n"
@@ -431,8 +431,8 @@ def test_quickstart_fresh_project_docs_uv_prompt_collection(
     monkeypatch.setattr("siesta.utils.project.run_command", lambda *_a, **_k: _Result())
     monkeypatch.setattr(cli, "load_deps", lambda: {"dev": []})
     monkeypatch.setattr(
-        "siesta.cli.docs_app.init_docs",
-        lambda **kwargs: init_docs_kwargs.update(kwargs),
+        "siesta.cli.docs_app._execute_docs_init",
+        lambda **kwargs: exec_kwargs.update(kwargs),
     )
     monkeypatch.setattr(cli, "tree_project", lambda *_args, **_kwargs: None)
 
@@ -450,7 +450,9 @@ def test_quickstart_fresh_project_docs_uv_prompt_collection(
     except SystemExit as e:
         assert e.code == 0
 
-    assert init_docs_kwargs["uv"] is None
+    # uv.lock does not exist at prompt-collection time (fresh project), so docs falls
+    # back to pip — resolved before the uv-init mutation could create a uv.lock.
+    assert exec_kwargs["with_uv"] is False
 
 
 def test_quickstart_installs_agents(tmp_path_chdir, capture_output):

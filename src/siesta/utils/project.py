@@ -4,6 +4,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from shutil import rmtree
 from textwrap import dedent
 
 import requests
@@ -255,6 +256,13 @@ _STD_OPTIONS = frozenset(
 
 @dataclass
 class UvInitMutation:
+    """Initialize a uv project with ``uv init``.
+
+    Built by ``project quickstart`` when uv-init is requested. Treats an existing
+    ``pyproject.toml``/``uv.lock`` as a Conflict (skip or abort); on a clean directory
+    it runs ``uv init`` with the chosen app/package/library layout.
+    """
+
     project_name: str
     as_app: bool
     as_pkg: bool
@@ -295,6 +303,11 @@ class UvInitMutation:
 
 @dataclass
 class DepsMutation:
+    """Install the project's dev dependencies via ``uv add --dev``.
+
+    Built by ``project quickstart``. Never conflicts — it only adds dependencies.
+    """
+
     deps: list[str]
 
     def detect_conflicts(self) -> list[Conflict]:
@@ -309,6 +322,11 @@ class DepsMutation:
 
 @dataclass
 class TestDepsMutation:
+    """Install test dependencies (``pytest``, ``pytest-cov``) with uv or pip.
+
+    Built by ``project setup-tests``. Never conflicts — it only adds dependencies.
+    """
+
     test_deps: list[str]
     has_uv: bool
 
@@ -329,6 +347,12 @@ class TestDepsMutation:
 
 @dataclass
 class PrecommitMutation:
+    """Write the pre-commit config and install its git hooks.
+
+    Built by ``project quickstart``. Never conflicts — the config is written or updated
+    in place.
+    """
+
     def detect_conflicts(self) -> list[Conflict]:
         return []
 
@@ -342,6 +366,12 @@ class PrecommitMutation:
 
 @dataclass
 class IpdbMutation:
+    """Set ``ipdb`` as the default debugger via ``PYTHONBREAKPOINT``.
+
+    Built by ``project quickstart``. Treats an already-configured ``PYTHONBREAKPOINT``
+    as a Conflict (skip, overwrite, or abort).
+    """
+
     def detect_conflicts(self) -> list[Conflict]:
         first_init = _first_init_path()
         if first_init and "PYTHONBREAKPOINT" in first_init.read_text():
@@ -372,6 +402,12 @@ class IpdbMutation:
 
 @dataclass
 class TestsInfraMutation:
+    """Write the test scaffolding (``tests/test_import.py``).
+
+    Built by ``project quickstart`` and ``project setup-tests``. Treats an existing
+    ``tests/test_import.py`` as a Conflict.
+    """
+
     project_name: str
 
     def detect_conflicts(self) -> list[Conflict]:
@@ -403,6 +439,12 @@ class TestsInfraMutation:
 
 @dataclass
 class TestActionsMutation:
+    """Write the GitHub Actions test workflow (``.github/workflows/test.yml``).
+
+    Built by ``project quickstart`` and ``project setup-tests``. Treats an existing
+    workflow file as a Conflict.
+    """
+
     def detect_conflicts(self) -> list[Conflict]:
         dest = Path(".github/workflows/test.yml")
         if dest.exists():
@@ -433,6 +475,11 @@ class TestActionsMutation:
 
 @dataclass
 class GitignoreMutation:
+    """Write the project ``.gitignore``.
+
+    Built by ``project quickstart``. Treats an existing ``.gitignore`` as a Conflict.
+    """
+
     def detect_conflicts(self) -> list[Conflict]:
         if Path(".gitignore").exists():
             return [
@@ -461,15 +508,24 @@ class GitignoreMutation:
 
 
 @dataclass
-class DocsMutation:
+class InitDocsMutation:
+    """Scaffold a new Sphinx documentation folder.
+
+    Built by ``docs init`` and ``project quickstart``. Treats an existing docs folder
+    as a Conflict; :meth:`apply` honours the resolved action (backup or overwrite),
+    then delegates the actual scaffolding — boilerplate copy, dependency install, and
+    initial build — to :func:`siesta.cli.docs_app._execute_docs_init`.
+    """
+
     path: str
     as_main_deps: bool
     deps: bool
-    uv: bool | None
+    with_uv: bool
+    interactive: bool
     branch: str
     contents: str
     remote_assets: bool
-    project_name: str
+    project_name: str | None
 
     def detect_conflicts(self) -> list[Conflict]:
         if resolve_path(self.path).exists():
@@ -489,23 +545,27 @@ class DocsMutation:
         if resolution is Resolution.SKIP:
             summary.skipped.append(str(dest))
             return summary
+        # Honour the resolved Conflict before scaffolding: a chosen backup renames the
+        # existing folder, while a plain overwrite clears it so no stale files survive.
         if resolution is Resolution.BACKUP:
             apply_backup(dest)
             summary.backed_up.append(str(dest))
-        from siesta.cli.docs_app import init_docs
+        elif resolution is Resolution.OVERWRITE and dest.exists():
+            rmtree(dest)
+        # Deferred import keeps the util → cli direction one-way (cli imports this class).
+        from siesta.cli.docs_app import _execute_docs_init
 
-        init_docs(
+        _execute_docs_init(
             path=self.path,
             as_main_deps=self.as_main_deps,
-            overwrite=True,
-            backup=False,
             deps=self.deps,
-            uv=self.uv,
-            interactive=False,
+            with_uv=self.with_uv,
+            interactive=self.interactive,
             branch=self.branch,
             contents=self.contents,
             remote_assets=self.remote_assets,
             project_name=self.project_name,
         )
-        summary.written.append(str(dest))
+        if resolution is not Resolution.BACKUP:
+            summary.written.append(str(dest))
         return summary

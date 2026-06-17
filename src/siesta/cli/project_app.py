@@ -20,8 +20,8 @@ from siesta.utils.config import CLI_DEFAULTS
 from siesta.utils.conflicts import Mutation, render_summary, run_mutations
 from siesta.utils.project import (
     DepsMutation,
-    DocsMutation,
     GitignoreMutation,
+    InitDocsMutation,
     IpdbMutation,
     PrecommitMutation,
     TestActionsMutation,
@@ -314,11 +314,12 @@ def quickstart_project(
         mutations.append(GitignoreMutation())
     if docs:
         mutations.append(
-            DocsMutation(
+            InitDocsMutation(
                 docs_path,
                 bool(as_main_deps),
                 deps,
-                docs_with_uv,
+                bool(docs_with_uv),
+                False,
                 branch,
                 contents,
                 remote_assets,
