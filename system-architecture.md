@@ -155,6 +155,8 @@ relevant sections here:
 | [0003](docs/adr/0003-secret-handling-policy.md) | Secret Handling Policy | PAT handling in `self_app` / `github` |
 | [0004](docs/adr/0004-cross-provider-agent-assets.md) | Cross-Provider Agent Asset Installation | Providers, Asset Scope, Mirroring |
 | [0005](docs/adr/0005-nested-agent-asset-operations.md) | Nested Agent Asset Operations | `agents add` / `agents remove` command shape |
+| [0006](docs/adr/0006-conflict-resolution-in-prompt-collection-phase.md) | Conflict Resolution in Prompt Collection Phase | Ordering Contract / Conflict Resolution |
+| [0007](docs/adr/0007-unified-conflict-resolution-seam.md) | Unified Conflict-Resolution Seam | `Mutation` Protocol, `Resolution` model, `--overwrite`/`--backup` |
 
 ## Core Concepts
 
@@ -189,13 +191,9 @@ delegates to `setup_tests(...)` and `init_docs(...)`, it calls them with
 
 ### Mutation & the Conflict-Aware Writer
 
-A **Mutation** is any filesystem write or external side effect. All Agent-Asset writes
-funnel through a single conflict policy in [agents.py](src/siesta/utils/agents.py#L315-L464):
-`_decide_action` maps `(dest exists?, --force, --backup, -i)` to one of `write`,
-`overwrite`, `backup_write`, or `skip`; `write_file` / `write_dir` then apply it. The
-non-interactive default for an existing target is **skip** (never silently clobber).
-Outcomes are accumulated into a `{written, skipped, backed_up}` summary and rendered by
-`print_summary`.
+A **Mutation** is any filesystem write or external side effect. All mutating commands share one seam in [conflicts.py](src/siesta/utils/conflicts.py): each operation implements `detect_conflicts() → list[Conflict]` (pure, Prompt Collection Phase) and `apply(resolutions) → OperationSummary` (Execution Phase). A driver, `run_mutations`, resolves every conflict via `resolve_conflict` (driven by `--overwrite` / `--backup` or an interactive prompt) before the first `apply()`.
+
+**Resolution** is a five-outcome enum (`skip`, `overwrite`, `backup`, `abort`, `merge`); each `Conflict` exposes only the applicable subset. `merge` is the content-preserving prepend for an existing `CLAUDE.md`. Low-level writes go through `write_path`; outcomes accumulate in `OperationSummary` and render via `render_summary`.
 
 ### Providers, Asset Scope, and Mirroring
 

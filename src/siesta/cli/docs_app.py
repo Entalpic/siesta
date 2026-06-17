@@ -22,6 +22,14 @@ from siesta.utils.common import (
     write_or_update_pre_commit_file,
 )
 from siesta.utils.config import CLI_DEFAULTS
+from siesta.utils.conflicts import (
+    Conflict,
+    OperationSummary,
+    Resolution,
+    apply_backup,
+    render_summary,
+    resolve_conflict,
+)
 from siesta.utils.docs import (
     AutoBuildDocs,
     copy_boilerplate,
@@ -53,7 +61,8 @@ docs_app = App(
 def init_docs(
     path: str = "./docs",
     as_main_deps: bool | None = None,
-    overwrite: bool = False,
+    overwrite: bool | None = None,
+    backup: bool = False,
     deps: bool | None = None,
     uv: bool | None = None,
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
@@ -62,62 +71,58 @@ def init_docs(
     remote_assets: bool = False,
     project_name: str | None = None,
 ):
-    """Initialize a Sphinx documentation project with Entalpic's standard configuration (also called within ``siesta project quickstart``).
+    """Initialize a Sphinx documentation project with Entalpic's standard configuration.
 
-    In particular:
+    Also called automatically by ``siesta project quickstart``.
 
-    - Initializes a new Sphinx project at the specified path.
+    Scaffolds a ``docs/`` folder using the bundled boilerplate: split source/build
+    layout, standard ``conf.py`` and ``index.rst`` with good defaults. Optionally
+    installs recommended dependencies (run ``siesta self show-deps`` to list them).
 
-    - Optionally installs recommended dependencies (run ``siesta self show-deps`` to see
-      them).
+    If you skip dependency installation, install them manually before running
+    ``siesta docs build`` or ``siesta docs watch``.
 
-    - Uses the split source / build folder structure.
-
-    - Includes standard `conf.py` and `index.rst` files with good defaults.
-
-    .. warning::
-
-        If you don't install the dependencies here, you will need to install them
-        manually.
-
-    .. important::
-
-        Update the placeholders (``$FILL_HERE``) in the generated files with the
-        appropriate values before you build the documentation.
-
-    .. tip::
-
-        Build the local HTML docs by running ``$ siesta docs build`` or ``$ siesta docs watch``.
+    After init, update the ``$FILL_HERE`` placeholders in the generated ``conf.py``
+    before building.
 
     Parameters
     ----------
     path : str, optional
-        Where to store the docs.
-    as_main_deps : bool, optional
-        Whether docs dependencies should be included in the main or dev dependencies.
-    overwrite : bool, optional
-        Whether to overwrite existing docs (if any).
-    deps : bool, optional
-        Prevent dependencies prompt by forcing its value to ``True`` or ``False``.
-    uv : bool, optional
-        Prevent uv prompt by forcing its value to ``True`` or ``False``.
+        Path for the docs folder, by default ``./docs``.
+    as_main_deps : bool | None, optional
+        Install docs dependencies as main (not dev) dependencies. Unspecified: defaults
+        to ``False`` in non-interactive mode; prompts when ``-i`` is active and deps
+        are enabled.
+    overwrite : bool | None, optional
+        How to handle an existing docs folder. ``True`` = overwrite, ``False`` = skip,
+        ``None`` (default) = prompt in TTY or abort in non-TTY.
+    backup : bool, optional
+        Back up existing docs before overwriting (applies when overwriting).
+    deps : bool | None, optional
+        Install recommended docs dependencies. Unspecified: defaults to ``True`` in
+        non-interactive mode; prompts when ``-i`` is active.
+    uv : bool | None, optional
+        Use ``uv add`` to install dependencies. Unspecified: defaults to ``True`` when
+        ``uv.lock`` exists (non-interactive); prompts when ``-i`` is active.
     interactive : bool, optional
-        Enable interactive mode with prompts for all options (``-i``). By default,
-        sensible defaults are used. User-specified flags always take precedence.
+        Prompt for each unspecified option before any Mutation (``-i``). When ``False``
+        (default), unspecified options use CLI defaults; explicit flags always win.
     branch : str, optional
-        The branch to fetch the static files from.
+        Branch to fetch static files from when using ``--remote-assets``.
     contents : str, optional
-        The path to the static files in the repository.
+        Path to static files in the repository when using ``--remote-assets``.
     remote_assets : bool, optional
         Fetch boilerplate docs assets from the remote GitHub repository instead of
         using the local bundled files. Requires a GitHub Personal Access Token (PAT).
-        Run ``$ siesta self set-github-pat`` to configure one.
+        Run ``siesta self set-github-pat`` to configure one.
     project_name : str, optional
         The project's name. If not provided, it will be prompted.
+
     Raises
     ------
-    sys.exit(1)
-        If the path already exists and ``--overwrite`` is not provided.
+    SystemExit
+        If the path already exists and ``overwrite`` is unset in a non-TTY
+        environment, or if the user selects Abort during Conflict Resolution.
     """
     # Check for Python files before proceeding
     if not has_python_files():
@@ -150,14 +155,33 @@ def init_docs(
     resolved_path = resolve_path(path)
     logger.info(f"Initializing docs at path: [r]{resolved_path}[/r]")
     if resolved_path.exists():
-        # docs folder already exists
-        if not overwrite:
-            # user doesn't want to overwrite -> abort
+        resolution = resolve_conflict(
+            Conflict(
+                key="docs",
+                name=f"docs at {resolved_path}",
+                options=frozenset(
+                    {
+                        Resolution.SKIP,
+                        Resolution.OVERWRITE,
+                        Resolution.BACKUP,
+                        Resolution.ABORT,
+                    }
+                ),
+            ),
+            overwrite=overwrite,
+            backup=backup,
+        )
+        if resolution is Resolution.ABORT:
+            logger.abort("Aborted.")
+        if resolution is Resolution.SKIP:
             logger.warning(f"Path already exists: {resolved_path}")
             logger.warning("Use --overwrite to overwrite.")
             logger.abort("Aborting.", exit=1)
+        if resolution is Resolution.BACKUP:
+            apply_backup(resolved_path)
+        elif resolution is Resolution.OVERWRITE:
+            rmtree(resolved_path)
 
-    # Prompt collection phase: gather decisions before any mutation.
     if deps is None:
         deps = logger.confirm("Would you like to install recommended dependencies?")
 
@@ -180,11 +204,7 @@ def init_docs(
                 )
 
     # Execution phase: perform mutations only after all decisions are collected.
-    if resolved_path.exists():
-        logger.warning("🚧 Overwriting path.")
-        rmtree(resolved_path)
-
-    resolved_path.mkdir(parents=True)
+    resolved_path.mkdir(parents=True, exist_ok=True)
     logger.success("Docs initialized 📄")
 
     # Install dependencies if requested.
@@ -274,7 +294,8 @@ def update(
         logger.success("Done.")
         return
 
-    # Execution phase: run only the selected mutating actions.
+    summary = OperationSummary()
+
     if update_static:
         static = resolved_path / "source" / "_static"
         if not static.exists():
@@ -287,11 +308,15 @@ def update(
             include_files_regex="_static",
             local=not remote_assets,
         )
-        logger.success("Static files updated.")
+        summary.written.append(str(static))
 
     if update_conf:
+        conf_path = resolved_path / "source" / "conf.py"
+        if conf_path.exists():
+            apply_backup(conf_path)
+            summary.backed_up.append(str(conf_path))
         update_conf_py(resolved_path, branch=branch, local=not remote_assets)
-        logger.success("[r]conf.py[/r] updated.")
+        summary.written.append(str(conf_path))
 
     if update_precommit:
         write_or_update_pre_commit_file()
@@ -301,7 +326,9 @@ def update(
             run_command(["uv", "run", "pre-commit", "install"])
         else:
             run_command(["pre-commit", "install"])
-        logger.success("Pre-commit hooks updated.")
+        summary.written.append(".pre-commit-config.yaml")
+
+    render_summary(summary)
     logger.success("Done.")
 
 

@@ -9,12 +9,23 @@ algorithm.
 import json
 import shutil
 import sys
+from collections.abc import Mapping
+from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
 from ruamel.yaml import YAML
 
 from siesta.utils.common import logger
+from siesta.utils.conflicts import (
+    Conflict,
+    Mutation,
+    OperationSummary,
+    Resolution,
+    apply_backup,
+    run_mutations,
+    write_path,
+)
 
 # ---------------------------------------------------------------------------
 # Catalog root
@@ -136,7 +147,7 @@ def resolve_scope(local: bool, global_: bool) -> str:
     ----------
     local : bool
         ``--local`` flag value.
-    global_ : bool
+    global\\_ : bool
         ``--global`` flag value.
 
     Returns
@@ -404,413 +415,239 @@ def resolve_selection(
 
 
 # ---------------------------------------------------------------------------
-# Conflict-aware writer
+# Mutation-based install helpers
 # ---------------------------------------------------------------------------
 
-_Action = str  # "write" | "overwrite" | "backup_write" | "skip"
+_STD_OPTIONS = frozenset(
+    {Resolution.SKIP, Resolution.OVERWRITE, Resolution.BACKUP, Resolution.ABORT}
+)
 
 
-def _decide_action(
-    dest: Path,
-    force: bool,
-    backup: bool,
-    interactive: bool,
-    label: str,
-) -> _Action:
-    """Decide how to handle a potential conflict at *dest*.
-
-    Parameters
-    ----------
-    dest : Path
-        Destination path (file or directory).
-    force : bool
-        Whether ``--force`` was passed.
-    backup : bool
-        Whether ``--backup`` was passed.
-    interactive : bool
-        Whether ``-i``/``--interactive`` was passed.
-    label : str
-        Human-readable label for prompts (e.g. the relative destination path).
-
-    Returns
-    -------
-    str
-        One of ``"write"``, ``"overwrite"``, ``"backup_write"``, or ``"skip"``.
-    """
-    if not dest.exists():
-        return "write"
-    if force:
-        return "backup_write" if backup else "overwrite"
-    if interactive:
-        choice = logger.select(
-            f"{label} already exists. What to do?",
-            ["skip", "overwrite", "backup and overwrite"],
-        )
-        if choice == "backup and overwrite":
-            return "backup_write"
-        return choice  # "skip" or "overwrite"
-    return "skip"
+def _record_write(summary: OperationSummary, action: Resolution, path: str) -> None:
+    if action is Resolution.BACKUP:
+        summary.backed_up.append(path)
+    elif action is not Resolution.SKIP:
+        summary.written.append(path)
 
 
-def _apply_backup(dest: Path) -> None:
-    """Rename *dest* to ``dest.bak`` (overwriting any previous backup).
+@dataclass
+class SkillMutation:
+    name: str
+    providers: list[str]
+    scope: str
 
-    Parameters
-    ----------
-    dest : Path
-        Path to back up.
-    """
-    bak = dest.parent / (dest.name + ".bak")
-    if bak.exists():
-        if bak.is_dir():
-            shutil.rmtree(bak)
-        else:
-            bak.unlink()
-    dest.rename(bak)
+    def detect_conflicts(self) -> list[Conflict]:
+        conflicts: list[Conflict] = []
+        for provider in self.providers:
+            dest = skill_target(provider, self.scope, self.name)
+            if dest.exists():
+                conflicts.append(
+                    Conflict(
+                        key=f"skill:{self.name}:{provider}",
+                        name=f"{provider}: {_display_path(dest)}",
+                        options=_STD_OPTIONS,
+                    )
+                )
+        return conflicts
 
-
-def write_file(
-    src: Path,
-    dest: Path,
-    *,
-    content_override: str | None = None,
-    force: bool = False,
-    backup: bool = False,
-    interactive: bool = False,
-    label: str | None = None,
-) -> _Action:
-    """Write a single file from *src* to *dest*, respecting the conflict policy.
-
-    Parameters
-    ----------
-    src : Path
-        Source file (unused when *content_override* is given).
-    dest : Path
-        Destination file path.
-    content_override : str, optional
-        When given, write this string instead of reading *src*.
-    force : bool, optional
-        Overwrite without prompting.
-    backup : bool, optional
-        Back up the existing file before overwriting.
-    interactive : bool, optional
-        Prompt the user when a conflict exists.
-    label : str, optional
-        Display label for conflict prompts; defaults to the dest filename.
-
-    Returns
-    -------
-    str
-        The action taken (``"write"``, ``"overwrite"``, ``"backup_write"``, or
-        ``"skip"``).
-    """
-    display = label or dest.name
-    action = _decide_action(dest, force, backup, interactive, display)
-    if action == "skip":
-        return "skip"
-    if action == "backup_write":
-        _apply_backup(dest)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if content_override is not None:
-        dest.write_text(content_override, encoding="utf-8")
-    else:
-        shutil.copy2(str(src), str(dest))
-    return action
-
-
-def write_dir(
-    src: Path,
-    dest: Path,
-    *,
-    force: bool = False,
-    backup: bool = False,
-    interactive: bool = False,
-    label: str | None = None,
-) -> _Action:
-    """Copy a directory from *src* to *dest*, respecting the conflict policy.
-
-    Parameters
-    ----------
-    src : Path
-        Source directory.
-    dest : Path
-        Destination directory.
-    force : bool, optional
-        Overwrite without prompting.
-    backup : bool, optional
-        Back up the existing directory before overwriting.
-    interactive : bool, optional
-        Prompt the user when a conflict exists.
-    label : str, optional
-        Display label for conflict prompts.
-
-    Returns
-    -------
-    str
-        The action taken.
-    """
-    display = label or dest.name
-    action = _decide_action(dest, force, backup, interactive, display)
-    if action == "skip":
-        return "skip"
-    if action == "backup_write":
-        _apply_backup(dest)
-    elif action == "overwrite":
-        shutil.rmtree(dest)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(str(src), str(dest))
-    return action
-
-
-# ---------------------------------------------------------------------------
-# High-level install helpers (called by CLI commands)
-# ---------------------------------------------------------------------------
-
-
-def install_skill(
-    name: str,
-    providers: list[str],
-    scope: str,
-    *,
-    force: bool = False,
-    backup: bool = False,
-    interactive: bool = False,
-) -> dict[str, list[str]]:
-    """Install a single skill for every requested Provider.
-
-    Parameters
-    ----------
-    name : str
-        Skill name (must exist in the catalog).
-    providers : list[str]
-        Target Providers (``"cursor"`` and/or ``"claude"``).
-    scope : str
-        ``"local"`` or ``"global"``.
-    force : bool, optional
-        Overwrite existing targets without prompting.
-    backup : bool, optional
-        Back up existing targets before overwriting.
-    interactive : bool, optional
-        Prompt on conflict.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        ``{"written": [...], "skipped": [...], "backed_up": [...]}``
-    """
-    src = Path(str(SKILLS_DIR / name))
-    summary: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
-    for provider in providers:
-        dest = skill_target(provider, scope, name)
-        action = write_dir(
-            src,
-            dest,
-            force=force,
-            backup=backup,
-            interactive=interactive,
-            label=f"{provider}: {_display_path(dest)}",
-        )
-        _record(summary, action, _display_path(dest))
-    return summary
-
-
-def install_rule(
-    name: str,
-    providers: list[str],
-    scope: str,
-    *,
-    force: bool = False,
-    backup: bool = False,
-    interactive: bool = False,
-) -> dict[str, list[str]]:
-    """Install a single rule for every requested Provider.
-
-    Parameters
-    ----------
-    name : str
-        Rule name (without extension).
-    providers : list[str]
-        Target Providers.
-    scope : str
-        ``"local"`` or ``"global"``.
-    force : bool, optional
-        Overwrite without prompting.
-    backup : bool, optional
-        Back up before overwriting.
-    interactive : bool, optional
-        Prompt on conflict.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        ``{"written": [...], "skipped": [...], "backed_up": [...]}``
-    """
-    src = Path(str(RULES_DIR / f"{name}.mdc"))
-    raw = src.read_text(encoding="utf-8")
-    summary: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
-    for provider in providers:
-        dest = rule_target(provider, scope, name)
-        content = raw if provider == "cursor" else mdc_to_claude(raw)
-        action = write_file(
-            src,
-            dest,
-            content_override=content,
-            force=force,
-            backup=backup,
-            interactive=interactive,
-            label=f"{provider}: {_display_path(dest)}",
-        )
-        _record(summary, action, _display_path(dest))
-    return summary
-
-
-def install_constitution(
-    name: str,
-    providers: list[str],
-    scope: str,
-    *,
-    force: bool = False,
-    backup: bool = False,
-    interactive: bool = False,
-) -> dict[str, list[str]]:
-    """Install a constitution for the requested Providers.
-
-    ``AGENTS.md`` is always written (Cursor compatibility; harmless for Claude).
-    ``CLAUDE.md`` (an ``@AGENTS.md`` import stub) is written only when ``claude``
-    is in *providers*.  If a ``CLAUDE.md`` already exists, the command appends the
-    import line rather than overwriting, subject to the usual conflict policy.
-
-    Parameters
-    ----------
-    name : str
-        Constitution template name (directory under ``constitutions/``).
-    providers : list[str]
-        Target Providers.
-    scope : str
-        ``"local"`` or ``"global"``.
-    force : bool, optional
-        Overwrite / force-append without prompting.
-    backup : bool, optional
-        Back up before overwriting.
-    interactive : bool, optional
-        Prompt on conflict.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        ``{"written": [...], "skipped": [...], "backed_up": [...]}``
-    """
-    summary: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
-    src_dir = Path(str(CONSTITUTIONS_DIR / name))
-
-    # Global + cursor-only: Cursor has no global AGENTS.md concept → skip with warning.
-    if providers == ["cursor"] and scope == "global":
-        logger.warning(
-            "Constitution is project-scoped for Cursor; nothing to do globally. "
-            "Tip: use --local (default) or --claude to target Claude's global ~/.claude/."
-        )
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        src = Path(str(SKILLS_DIR / self.name))
+        for provider in self.providers:
+            dest = skill_target(provider, self.scope, self.name)
+            key = f"skill:{self.name}:{provider}"
+            resolution = resolutions.get(key, Resolution.OVERWRITE)
+            if resolution is Resolution.SKIP:
+                summary.skipped.append(_display_path(dest))
+                continue
+            action = write_path(src, dest, resolution)
+            _record_write(summary, action, _display_path(dest))
         return summary
 
-    # Determine write roots.
-    if scope == "local":
-        agents_dest = Path.cwd() / "AGENTS.md"
-        claude_dest = Path.cwd() / "CLAUDE.md"
-    else:
-        # global: only Claude pair lives under ~/.claude/
-        agents_dest = Path.home() / ".claude" / "AGENTS.md"
-        claude_dest = Path.home() / ".claude" / "CLAUDE.md"
 
-    # 1) AGENTS.md — always written regardless of provider.
-    agents_src = src_dir / "AGENTS.md"
-    action = write_file(
-        agents_src,
-        agents_dest,
-        force=force,
-        backup=backup,
-        interactive=interactive,
-        label="AGENTS.md",
-    )
-    _record(summary, action, _display_path(agents_dest))
-    if action != "skip":
-        logger.info(
-            "AGENTS.md written (Cursor compatibility; not required by Claude itself)."
-        )
+@dataclass
+class RuleMutation:
+    name: str
+    providers: list[str]
+    scope: str
 
-    # 2) CLAUDE.md stub — only when claude is targeted.
-    if "claude" not in providers:
+    def detect_conflicts(self) -> list[Conflict]:
+        conflicts: list[Conflict] = []
+        for provider in self.providers:
+            dest = rule_target(provider, self.scope, self.name)
+            if dest.exists():
+                conflicts.append(
+                    Conflict(
+                        key=f"rule:{self.name}:{provider}",
+                        name=f"{provider}: {_display_path(dest)}",
+                        options=_STD_OPTIONS,
+                    )
+                )
+        return conflicts
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        src = Path(str(RULES_DIR / f"{self.name}.mdc"))
+        raw = src.read_text(encoding="utf-8")
+        for provider in self.providers:
+            dest = rule_target(provider, self.scope, self.name)
+            key = f"rule:{self.name}:{provider}"
+            resolution = resolutions.get(key, Resolution.OVERWRITE)
+            if resolution is Resolution.SKIP:
+                summary.skipped.append(_display_path(dest))
+                continue
+            content = raw if provider == "cursor" else mdc_to_claude(raw)
+            action = write_path(src, dest, resolution, content_override=content)
+            _record_write(summary, action, _display_path(dest))
         return summary
 
-    if not claude_dest.exists():
-        claude_src = src_dir / "CLAUDE.md"
-        action = write_file(
-            claude_src,
-            claude_dest,
-            force=False,  # fresh write, no conflict
-            backup=False,
-            interactive=False,
-            label="CLAUDE.md",
+
+@dataclass
+class ConstitutionMutation:
+    name: str
+    providers: list[str]
+    scope: str
+
+    def _destinations(self) -> tuple[Path, Path]:
+        if self.scope == "local":
+            return Path.cwd() / "AGENTS.md", Path.cwd() / "CLAUDE.md"
+        return (
+            Path.home() / ".claude" / "AGENTS.md",
+            Path.home() / ".claude" / "CLAUDE.md",
         )
-        _record(summary, action, _display_path(claude_dest))
-    else:
-        existing = claude_dest.read_text(encoding="utf-8")
-        if IMPORT_LINE in existing:
-            logger.info("CLAUDE.md already imports AGENTS.md; nothing to do.")
-        else:
-            _handle_claude_import(
-                claude_dest,
-                existing,
-                force=force,
-                interactive=interactive,
-                summary=summary,
+
+    def detect_conflicts(self) -> list[Conflict]:
+        if self.providers == ["cursor"] and self.scope == "global":
+            return []
+        agents_dest, claude_dest = self._destinations()
+        conflicts: list[Conflict] = []
+        if agents_dest.exists():
+            conflicts.append(
+                Conflict(
+                    key="constitution:agents",
+                    name="AGENTS.md",
+                    options=_STD_OPTIONS,
+                )
             )
+        if "claude" in self.providers and claude_dest.exists():
+            existing = claude_dest.read_text(encoding="utf-8")
+            if IMPORT_LINE not in existing:
+                conflicts.append(
+                    Conflict(
+                        key="constitution:claude",
+                        name=f"CLAUDE.md ({_display_path(claude_dest)})",
+                        options=frozenset(
+                            {Resolution.SKIP, Resolution.MERGE, Resolution.ABORT}
+                        ),
+                    )
+                )
+        return conflicts
 
-    return summary
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        if self.providers == ["cursor"] and self.scope == "global":
+            logger.warning(
+                "Constitution is project-scoped for Cursor; nothing to do globally. "
+                "Tip: use --local (default) or --claude to target Claude's global ~/.claude/."
+            )
+            return summary
+
+        src_dir = Path(str(CONSTITUTIONS_DIR / self.name))
+        agents_dest, claude_dest = self._destinations()
+
+        agents_resolution = resolutions.get("constitution:agents", Resolution.OVERWRITE)
+        if agents_resolution is not Resolution.SKIP:
+            action = write_path(src_dir / "AGENTS.md", agents_dest, agents_resolution)
+            _record_write(summary, action, _display_path(agents_dest))
+            logger.info(
+                "AGENTS.md written (Cursor compatibility; not required by Claude itself)."
+            )
+        else:
+            summary.skipped.append(_display_path(agents_dest))
+
+        if "claude" not in self.providers:
+            return summary
+
+        if not claude_dest.exists():
+            action = write_path(
+                src_dir / "CLAUDE.md", claude_dest, Resolution.OVERWRITE
+            )
+            _record_write(summary, action, _display_path(claude_dest))
+        else:
+            existing = claude_dest.read_text(encoding="utf-8")
+            if IMPORT_LINE in existing:
+                logger.info("CLAUDE.md already imports AGENTS.md; nothing to do.")
+            else:
+                claude_resolution = resolutions.get("constitution:claude")
+                if claude_resolution is Resolution.SKIP:
+                    summary.skipped.append(_display_path(claude_dest))
+                elif claude_resolution is Resolution.MERGE:
+                    claude_dest.write_text(
+                        f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8"
+                    )
+                    summary.merged.append(_display_path(claude_dest))
+                else:
+                    action = write_path(
+                        src_dir / "CLAUDE.md",
+                        claude_dest,
+                        claude_resolution or Resolution.OVERWRITE,
+                    )
+                    _record_write(summary, action, _display_path(claude_dest))
+
+        return summary
 
 
-def _handle_claude_import(
-    claude_dest: Path,
-    existing: str,
+def quickstart_asset_mutations(providers: list[str], scope: str) -> list[Mutation]:
+    """Build mutations for every asset declared in the Quickstart Config."""
+    cfg = load_quickstart()
+
+    unknown_skills = [s for s in cfg["skills"] if s not in available_skills()]
+    if unknown_skills:
+        logger.abort(
+            f"Quickstart Config references unknown skill(s): {unknown_skills}. "
+            f"Available: {available_skills()}"
+        )
+
+    unknown_rules = [r for r in cfg["rules"] if r not in available_rules()]
+    if unknown_rules:
+        logger.abort(
+            f"Quickstart Config references unknown rule(s): {unknown_rules}. "
+            f"Available: {available_rules()}"
+        )
+
+    if cfg["constitution"] and cfg["constitution"] not in available_constitutions():
+        logger.abort(
+            f"Quickstart Config references unknown constitution: {cfg['constitution']!r}. "
+            f"Available: {available_constitutions()}"
+        )
+
+    mutations: list[Mutation] = []
+    for name in cfg["skills"]:
+        mutations.append(SkillMutation(name, providers, scope))
+    for name in cfg["rules"]:
+        mutations.append(RuleMutation(name, providers, scope))
+    if cfg["constitution"]:
+        mutations.append(ConstitutionMutation(cfg["constitution"], providers, scope))
+    return mutations
+
+
+def install_quickstart(
+    providers: list[str],
+    scope: str,
     *,
-    force: bool,
-    interactive: bool,
-    summary: dict[str, list[str]],
-) -> None:
-    """Prepend the ``@AGENTS.md`` import to an existing ``CLAUDE.md`` if approved.
-
-    Parameters
-    ----------
-    claude_dest : Path
-        Path to the existing CLAUDE.md.
-    existing : str
-        Current content of CLAUDE.md.
-    force : bool
-        Prepend without prompting when True.
-    interactive : bool
-        Prompt the user when True.
-    summary : dict[str, list[str]]
-        Mutable summary dict to record the outcome.
-    """
-    do_prepend = False
-    if interactive:
-        do_prepend = logger.confirm(
-            f"CLAUDE.md exists but is missing `{IMPORT_LINE}`. Prepend the import? "
-            "(Content will be preserved.)"
-        )
-    elif force:
-        do_prepend = True
-    else:
-        logger.warning(
-            f"CLAUDE.md exists but has no `{IMPORT_LINE}` import. "
-            "Skipped. Add `@AGENTS.md` at the top of CLAUDE.md manually to link it."
-        )
-
-    if do_prepend:
-        claude_dest.write_text(f"{IMPORT_LINE}\n\n{existing}", encoding="utf-8")
-        summary["written"].append(_display_path(claude_dest) + " (import prepended)")
+    overwrite: bool | None = None,
+    backup: bool = False,
+) -> OperationSummary:
+    """Install all Agent Assets declared in the Quickstart Config."""
+    return run_mutations(
+        quickstart_asset_mutations(providers, scope),
+        overwrite=overwrite,
+        backup=backup,
+    )
 
 
 # ---------------------------------------------------------------------------
-# Quickstart Config loader + installer
+# Quickstart Config loader
 # ---------------------------------------------------------------------------
 
 
@@ -839,144 +676,6 @@ def load_quickstart() -> dict:
         "rules": list(data.get("rules") or []),
         "constitution": data.get("constitution") or None,
     }
-
-
-def install_quickstart(
-    providers: list[str],
-    scope: str,
-    *,
-    force: bool = False,
-    backup: bool = False,
-    interactive: bool = False,
-) -> dict[str, list[str]]:
-    """Install all Agent Assets declared in the Quickstart Config.
-
-    Reads the bundled ``agents_assets/quickstart.yaml``, validates every
-    listed name against the catalog (fail-fast), then delegates to
-    :func:`install_skill`, :func:`install_rule`, and
-    :func:`install_constitution`.
-
-    Parameters
-    ----------
-    providers : list[str]
-        Target Providers (``"cursor"`` and/or ``"claude"``).
-    scope : str
-        ``"local"`` or ``"global"``.
-    force : bool, optional
-        Overwrite existing targets without prompting.
-    backup : bool, optional
-        Back up existing targets before overwriting.
-    interactive : bool, optional
-        Prompt on conflict.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        ``{"written": [...], "skipped": [...], "backed_up": [...]}``
-    """
-    cfg = load_quickstart()
-
-    # Validation phase: abort before any write if the config references unknown assets.
-    unknown_skills = [s for s in cfg["skills"] if s not in available_skills()]
-    if unknown_skills:
-        logger.abort(
-            f"Quickstart Config references unknown skill(s): {unknown_skills}. "
-            f"Available: {available_skills()}"
-        )
-
-    unknown_rules = [r for r in cfg["rules"] if r not in available_rules()]
-    if unknown_rules:
-        logger.abort(
-            f"Quickstart Config references unknown rule(s): {unknown_rules}. "
-            f"Available: {available_rules()}"
-        )
-
-    if cfg["constitution"] and cfg["constitution"] not in available_constitutions():
-        logger.abort(
-            f"Quickstart Config references unknown constitution: {cfg['constitution']!r}. "
-            f"Available: {available_constitutions()}"
-        )
-
-    # Execution phase: install each category, merging results into one summary.
-    combined: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
-    for name in cfg["skills"]:
-        result = install_skill(
-            name, providers, scope, force=force, backup=backup, interactive=interactive
-        )
-        for key in combined:
-            combined[key].extend(result.get(key, []))
-
-    for name in cfg["rules"]:
-        result = install_rule(
-            name, providers, scope, force=force, backup=backup, interactive=interactive
-        )
-        for key in combined:
-            combined[key].extend(result.get(key, []))
-
-    if cfg["constitution"]:
-        result = install_constitution(
-            cfg["constitution"],
-            providers,
-            scope,
-            force=force,
-            backup=backup,
-            interactive=interactive,
-        )
-        for key in combined:
-            combined[key].extend(result.get(key, []))
-
-    return combined
-
-
-# ---------------------------------------------------------------------------
-# Shared summary helpers
-# ---------------------------------------------------------------------------
-
-
-def _record(summary: dict[str, list[str]], action: str, path: str) -> None:
-    """Record an install action in the summary dict.
-
-    Parameters
-    ----------
-    summary : dict[str, list[str]]
-        Mutable summary dict with keys ``"written"``, ``"skipped"``,
-        ``"backed_up"``.
-    action : str
-        One of ``"write"``, ``"overwrite"``, ``"backup_write"``, or ``"skip"``.
-    path : str
-        The destination path string to record.
-    """
-    if action in ("write", "overwrite"):
-        summary["written"].append(path)
-    elif action == "backup_write":
-        summary["backed_up"].append(path)
-    elif action == "skip":
-        summary["skipped"].append(path)
-
-
-def print_summary(summary: dict[str, list[str]]) -> None:
-    """Print a Rich install summary.
-
-    Parameters
-    ----------
-    summary : dict[str, list[str]]
-        ``{"written": [...], "skipped": [...], "backed_up": [...]}``
-    """
-    written = summary.get("written", [])
-    skipped = summary.get("skipped", [])
-    backed_up = summary.get("backed_up", [])
-
-    if written:
-        for path in written:
-            logger.success(f"Written: {path}")
-    if backed_up:
-        for path in backed_up:
-            logger.info(f"Backed up + written: {path}")
-    if skipped:
-        for path in skipped:
-            logger.warning(f"Skipped (already exists): {path}")
-    if not written and not backed_up and not skipped:
-        logger.info("Nothing to do.")
 
 
 # ---------------------------------------------------------------------------
@@ -1205,41 +904,29 @@ def _strip_agents_import(content: str) -> str:
     return "\n".join(kept).strip("\n")
 
 
-def remove_path(path: Path, *, backup: bool = False) -> str:
-    """Remove a file or directory, optionally backing it up first.
-
-    Parameters
-    ----------
-    path : Path
-        Path to remove.
-    backup : bool, optional
-        When ``True``, rename to ``<name>.bak`` before deletion.
-
-    Returns
-    -------
-    str
-        ``"removed"`` or ``"backed_up"``.
-    """
+def remove_path(path: Path, *, backup: bool = False) -> Resolution:
+    """Remove a file or directory, optionally backing it up first."""
     if backup:
-        _apply_backup(path)
-        return "backed_up"
+        apply_backup(path)
+        return Resolution.BACKUP
     if path.is_dir():
         shutil.rmtree(path)
     else:
         path.unlink()
-    return "removed"
+    return Resolution.OVERWRITE
 
 
-def _record_removal(summary: dict[str, list[str]], action: str, path: str) -> None:
-    """Record a removal action in the summary dict."""
-    if action == "removed":
-        summary["removed"].append(path)
-    elif action == "backed_up":
-        summary["backed_up"].append(path)
-    elif action == "skipped":
-        summary["skipped"].append(path)
+def _record_removal(
+    summary: OperationSummary, action: Resolution | str, path: str
+) -> None:
+    if action in (Resolution.OVERWRITE, "removed"):
+        summary.removed.append(path)
+    elif action in (Resolution.BACKUP, "backed_up"):
+        summary.backed_up.append(path)
+    elif action in (Resolution.SKIP, "skipped"):
+        summary.skipped.append(path)
     elif action == "modified":
-        summary["modified"].append(path)
+        summary.written.append(path)
 
 
 def remove_skill(
@@ -1248,7 +935,7 @@ def remove_skill(
     scope: str,
     *,
     backup: bool = False,
-) -> dict[str, list[str]]:
+) -> OperationSummary:
     """Remove a single skill for every requested Provider (paths pre-confirmed).
 
     Parameters
@@ -1267,7 +954,7 @@ def remove_skill(
     dict[str, list[str]]
         ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
     """
-    summary: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
+    summary = OperationSummary()
     for provider in providers:
         dest = skill_target(provider, scope, name)
         if not dest.exists():
@@ -1283,7 +970,7 @@ def remove_rule(
     scope: str,
     *,
     backup: bool = False,
-) -> dict[str, list[str]]:
+) -> OperationSummary:
     """Remove a single rule for every requested Provider (paths pre-confirmed).
 
     Parameters
@@ -1302,7 +989,7 @@ def remove_rule(
     dict[str, list[str]]
         ``{"removed": [...], "skipped": [...], "backed_up": [...]}``
     """
-    summary: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
+    summary = OperationSummary()
     for provider in providers:
         dest = rule_target(provider, scope, name)
         if not dest.exists():
@@ -1342,7 +1029,7 @@ def remove_constitution_file(
         if content not in _catalog_agents_md_contents() and not force:
             return "skipped", display + " (user-authored; pass --force to remove)"
         if backup:
-            _apply_backup(path)
+            apply_backup(path)
             return "backed_up", display
         path.unlink()
         return "removed", display
@@ -1352,14 +1039,14 @@ def remove_constitution_file(
         if not force:
             return "skipped", display + " (user-authored; pass --force to remove)"
         if backup:
-            _apply_backup(path)
+            apply_backup(path)
             return "backed_up", display
         path.unlink()
         return "removed", display
 
     if _claude_md_is_import_stub(content):
         if backup:
-            _apply_backup(path)
+            apply_backup(path)
             return "backed_up", display
         path.unlink()
         return "removed", display
@@ -1367,7 +1054,7 @@ def remove_constitution_file(
     new_content = _strip_agents_import(content)
     suffix = " (import removed)"
     if backup:
-        _apply_backup(path)
+        apply_backup(path)
         suffix = " (import removed; original backed up)"
     path.write_text(new_content + ("\n" if new_content else ""), encoding="utf-8")
     return "modified", display + suffix
@@ -1381,41 +1068,9 @@ def remove_constitution(
     backup: bool = False,
     confirmed_agents: bool = False,
     confirmed_claude: bool = False,
-) -> dict[str, list[str]]:
-    """Remove Constitution files confirmed during the Prompt Collection Phase.
-
-    Parameters
-    ----------
-    providers : list[str]
-        Target Providers.
-    scope : str
-        ``"local"`` or ``"global"``.
-    force : bool, optional
-        Allow removing non-catalog/user-authored Constitution content.
-    backup : bool, optional
-        Back up before removing or rewriting files.
-    confirmed_agents : bool, optional
-        Whether the user confirmed ``AGENTS.md`` removal.
-    confirmed_claude : bool, optional
-        Whether the user confirmed ``CLAUDE.md`` removal/modification.
-
-    Returns
-    -------
-    dict[str, list[str]]
-        ``{"removed": [...], "skipped": [...], "backed_up": [...], "modified": [...]}``
-        where ``"modified"`` holds files edited in place (e.g. a ``CLAUDE.md``
-        whose ``@AGENTS.md`` import was stripped while the body was kept).
-    """
-    summary: dict[str, list[str]] = {
-        "removed": [],
-        "skipped": [],
-        "backed_up": [],
-        "modified": [],
-    }
-
-    # constitution_paths returns (None, None) for the cursor/global combination,
-    # so no removal branch runs and an empty summary is returned. The user-facing
-    # warning for that case lives in the CLI command (remove_constitution_cmd).
+) -> OperationSummary:
+    """Remove Constitution files confirmed during the Prompt Collection Phase."""
+    summary = OperationSummary()
     agents_path, claude_path = constitution_paths(providers, scope)
 
     if confirmed_agents and agents_path and agents_path.exists():
@@ -1431,33 +1086,3 @@ def remove_constitution(
         _record_removal(summary, action, display)
 
     return summary
-
-
-def print_removal_summary(summary: dict[str, list[str]]) -> None:
-    """Print a Rich removal summary.
-
-    Parameters
-    ----------
-    summary : dict[str, list[str]]
-        ``{"removed": [...], "skipped": [...], "backed_up": [...], "modified": [...]}``
-        (``"modified"`` is optional and only present for constitution removals).
-    """
-    removed = summary.get("removed", [])
-    skipped = summary.get("skipped", [])
-    backed_up = summary.get("backed_up", [])
-    modified = summary.get("modified", [])
-
-    if removed:
-        for path in removed:
-            logger.success(f"Removed: {path}")
-    if modified:
-        for path in modified:
-            logger.success(f"Updated: {path}")
-    if backed_up:
-        for path in backed_up:
-            logger.info(f"Backed up + removed: {path}")
-    if skipped:
-        for path in skipped:
-            logger.warning(f"Skipped: {path}")
-    if not removed and not backed_up and not skipped and not modified:
-        logger.info("Nothing to do.")

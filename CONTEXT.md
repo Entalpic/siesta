@@ -42,7 +42,7 @@ _Avoid_: abort, quit
 An artifact that existed on disk _before the run started_ and that a Mutation would overwrite or corrupt if run unconditionally. Scope is pre-run: an artifact a prior Mutation produced within the same run (for example the `.gitignore` that `uv init` writes during `quickstart`) is not a Conflict — it is a byproduct of the pipeline, and a later step that owns that artifact may overwrite it freely.
 
 **Conflict Resolution**:
-The sub-process within the Prompt Collection Phase where each detected Conflict is surfaced to the user, who declares skip, overwrite, or abort. All Conflict Resolutions are collected before the first Mutation — guaranteeing that Abort leaves the project state identical to its pre-run state.
+The sub-process within the Prompt Collection Phase where each detected Conflict is surfaced to the user, who declares skip, overwrite, backup, abort, or merge (each Conflict exposes only the applicable subset; merge is the content-preserving prepend used for an existing `CLAUDE.md`). All Conflict Resolutions are collected before the first Mutation — guaranteeing that Abort leaves the project state identical to its pre-run state.
 _Avoid_: guard, check, validation (those are Validation Phase terms)
 
 **Abort**:
