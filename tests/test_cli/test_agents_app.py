@@ -58,6 +58,14 @@ class TestAddSkill:
             tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
         ).exists()
 
+    def test_empty_skill_dir_is_not_conflict(self, tmp_path_chdir):
+        # A pre-existing but empty skill dir has nothing to overwrite, so it is not
+        # a Conflict — the skill installs into it without prompting.
+        dest = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs"
+        dest.mkdir(parents=True)
+        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
+        assert (dest / "SKILL.md").exists()
+
     def test_prints_skill_path_relative_to_cwd(self, tmp_path_chdir, capsys):
         run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
         output = capsys.readouterr().out
@@ -185,6 +193,15 @@ class TestAddRule:
         dest.write_text("mine")
         run("agents", "add", "rule", "python-docstrings", "--cursor")
         assert dest.read_text() == "mine"
+
+    def test_empty_rule_file_is_still_a_conflict(self, tmp_path_chdir):
+        # An empty file can be intentional, so it is a Conflict: --no-overwrite skips
+        # it and leaves it untouched rather than clobbering it with the bundled rule.
+        dest = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
+        dest.parent.mkdir(parents=True)
+        dest.write_text("")
+        run("agents", "add", "rule", "python-docstrings", "--cursor", "--no-overwrite")
+        assert dest.read_text() == ""
 
     def test_overwrite_overwrites(self, tmp_path_chdir):
         dest = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"

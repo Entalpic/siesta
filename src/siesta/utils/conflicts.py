@@ -45,6 +45,31 @@ class OperationSummary:
         self.removed += other.removed
 
 
+def is_occupied(path: Path) -> bool:
+    """Whether *path* holds an artifact a Mutation would overwrite.
+
+    A missing path is vacant, and so is an empty directory — it is only a container
+    with nothing to lose. Any file counts as occupied, even a zero-byte one: an empty
+    file can be intentional (a package's ``__init__.py``, a ``py.typed`` marker), so a
+    Mutation must treat it as a Conflict rather than clobber it silently.
+
+    Parameters
+    ----------
+    path : Path
+        Destination path a Mutation would write to.
+
+    Returns
+    -------
+    bool
+        ``True`` if *path* is an existing file or a non-empty directory.
+    """
+    if not path.exists():
+        return False
+    if path.is_dir():
+        return any(path.iterdir())
+    return True
+
+
 def apply_backup(dest: Path) -> None:
     """Rename *dest* to ``dest.bak`` (overwriting any previous backup)."""
     bak = dest.parent / (dest.name + ".bak")

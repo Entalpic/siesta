@@ -23,6 +23,7 @@ from siesta.utils.conflicts import (
     OperationSummary,
     Resolution,
     apply_backup,
+    is_occupied,
 )
 
 
@@ -411,7 +412,7 @@ class TestsInfraMutation:
     project_name: str
 
     def detect_conflicts(self) -> list[Conflict]:
-        if Path("tests/test_import.py").exists():
+        if is_occupied(Path("tests/test_import.py")):
             return [
                 Conflict(
                     key="tests",
@@ -447,7 +448,7 @@ class TestActionsMutation:
 
     def detect_conflicts(self) -> list[Conflict]:
         dest = Path(".github/workflows/test.yml")
-        if dest.exists():
+        if is_occupied(dest):
             return [
                 Conflict(
                     key="actions",
@@ -481,7 +482,7 @@ class GitignoreMutation:
     """
 
     def detect_conflicts(self) -> list[Conflict]:
-        if Path(".gitignore").exists():
+        if is_occupied(Path(".gitignore")):
             return [
                 Conflict(
                     key="gitignore",
@@ -528,7 +529,7 @@ class InitDocsMutation:
     project_name: str | None
 
     def detect_conflicts(self) -> list[Conflict]:
-        if resolve_path(self.path).exists():
+        if is_occupied(resolve_path(self.path)):
             return [
                 Conflict(
                     key="docs",

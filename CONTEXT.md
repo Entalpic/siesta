@@ -39,7 +39,7 @@ User interruption during prompt collection that exits with code 130 at the CLI e
 _Avoid_: abort, quit
 
 **Conflict**:
-An artifact that existed on disk _before the run started_ and that a Mutation would overwrite or corrupt if run unconditionally. Scope is pre-run: an artifact a prior Mutation produced within the same run (for example the `.gitignore` that `uv init` writes during `quickstart`) is not a Conflict — it is a byproduct of the pipeline, and a later step that owns that artifact may overwrite it freely.
+An artifact that existed on disk _before the run started_ and that a Mutation would overwrite or corrupt if run unconditionally. An empty directory is not a Conflict — it is a vacant container with nothing to lose, so a Mutation may populate it freely. A file is different: any existing file is a Conflict, even a zero-byte one, because an empty file can be intentional (a package's `__init__.py`, a `py.typed` marker) and must not be clobbered silently. Scope is also pre-run: an artifact a prior Mutation produced within the same run (for example the `.gitignore` that `uv init` writes during `quickstart`) is not a Conflict — it is a byproduct of the pipeline, and a later step that owns that artifact may overwrite it freely.
 
 **Conflict Resolution**:
 The sub-process within the Prompt Collection Phase where each detected Conflict is surfaced to the user, who declares skip, overwrite, backup, abort, or merge (each Conflict exposes only the applicable subset; merge is the content-preserving prepend used for an existing `CLAUDE.md`). All Conflict Resolutions are collected before the first Mutation — guaranteeing that Abort leaves the project state identical to its pre-run state.

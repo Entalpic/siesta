@@ -23,6 +23,7 @@ from siesta.utils.conflicts import (
     OperationSummary,
     Resolution,
     apply_backup,
+    is_occupied,
     run_mutations,
     write_path,
 )
@@ -446,7 +447,7 @@ class SkillMutation:
         conflicts: list[Conflict] = []
         for provider in self.providers:
             dest = skill_target(provider, self.scope, self.name)
-            if dest.exists():
+            if is_occupied(dest):
                 conflicts.append(
                     Conflict(
                         key=f"skill:{self.name}:{provider}",
@@ -488,7 +489,7 @@ class RuleMutation:
         conflicts: list[Conflict] = []
         for provider in self.providers:
             dest = rule_target(provider, self.scope, self.name)
-            if dest.exists():
+            if is_occupied(dest):
                 conflicts.append(
                     Conflict(
                         key=f"rule:{self.name}:{provider}",
@@ -541,7 +542,7 @@ class ConstitutionMutation:
             return []
         agents_dest, claude_dest = self._destinations()
         conflicts: list[Conflict] = []
-        if agents_dest.exists():
+        if is_occupied(agents_dest):
             conflicts.append(
                 Conflict(
                     key="constitution:agents",
@@ -549,7 +550,7 @@ class ConstitutionMutation:
                     options=_STD_OPTIONS,
                 )
             )
-        if "claude" in self.providers and claude_dest.exists():
+        if "claude" in self.providers and is_occupied(claude_dest):
             existing = claude_dest.read_text(encoding="utf-8")
             if IMPORT_LINE not in existing:
                 conflicts.append(

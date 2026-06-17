@@ -17,6 +17,7 @@ All filesystem conflicts in `project`, `docs`, and `agents` commands share one `
 - CLI conflict vocabulary is `--overwrite` (tri-state) and `--backup`; add/overwrite `--force` is removed. `agents remove ... --force` remains a distinct authorization flag for user-authored Constitution files.
 - `agents add` is prompt-first like `project quickstart` (extends ADR 0001/0006).
 - Non-TTY with `overwrite=None` aborts before any mutation.
+- A shared `is_occupied` predicate decides what counts as a Conflict: an empty directory is vacant (populate it without prompting), but any existing file is a Conflict — even a zero-byte one, since an empty file can be intentional. Applies to every path-overwrite detector (skill, rule, constitution, docs, gitignore, tests infra, test actions); `UvInitMutation` (project-state guard) and `IpdbMutation` (content-flag check) keep their own predicates.
 - `docs init` runs through `run_mutations` like `quickstart` / `setup_tests` / `agents add`: it owns no bespoke conflict handling, so its docs-folder Conflict is resolved before any scaffolding. `InitDocsMutation.apply()` performs the scaffolding (via `_execute_docs_init`); the CLI command only collects the deps/uv decisions up front.
 - Removal and `docs update` reporting reuse `OperationSummary` / `render_summary` without participating in the Conflict framework.
 
