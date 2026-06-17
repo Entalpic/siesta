@@ -235,7 +235,10 @@ The **Constitution** model is the subtlest: `AGENTS.md` is the **source of truth
 *always* written (Cursor compatibility, harmless for Claude); `CLAUDE.md` is merely an
 `@AGENTS.md` import stub. When a `CLAUDE.md` already exists, the installer **prepends** the
 import line rather than overwriting, preserving user content
-([agents.py:672](src/siesta/utils/agents.py#L672)).
+([agents.py:672](src/siesta/utils/agents.py#L672)). On removal, `agents remove constitution`
+must not delete `AGENTS.md` while leaving a `CLAUDE.md` that still imports it — the command
+surfaces that cross-file dependency during Prompt Collection and suggests manual cleanup
+rather than rewriting `CLAUDE.md` automatically.
 
 ### Install Summary
 
@@ -267,7 +270,9 @@ Add commands are thin: they resolve scope/providers/selection (Validation Phase)
 then loop over installers (Execution Phase). Remove commands follow a stricter
 validate → collect per-candidate confirmations → mutate flow: every detected
 removal target is confirmed through questionary before any file is deleted or
-rewritten. All catalog discovery, installed-asset detection, path resolution,
+rewritten. Constitution removal additionally checks whether deleting `AGENTS.md`
+alone would leave `CLAUDE.md` with a broken `@AGENTS.md` import (including
+local `--cursor` runs where both files coexist). All catalog discovery, installed-asset detection, path resolution,
 ``.mdc`` translation, the conflict-aware writer, conservative Constitution
 removal, and the `quickstart.yaml` loader live in `utils/agents`.
 `install_quickstart` validates every name in the **Quickstart Config** against the catalog

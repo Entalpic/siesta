@@ -17,12 +17,16 @@ from siesta.utils.agents import (
     _display_path,
     _split_frontmatter,
     _split_globs,
+    agents_md_is_removable,
+    agents_removal_would_break_claude_import,
     asset_search_paths,
     available_constitutions,
     available_rules,
     available_skills,
     base_dir,
+    claude_md_imports_agents,
     collect_confirmed_removals,
+    constitution_claude_counterpart_path,
     constitution_paths,
     detect_installed_rules,
     detect_installed_skills,
@@ -835,6 +839,58 @@ class TestRemoveSkillRule:
         )
 
 
+class TestConstitutionRemovalHelpers:
+    def test_counterpart_path_local(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert constitution_claude_counterpart_path("local") == tmp_path / "CLAUDE.md"
+
+    def test_counterpart_path_global(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        assert (
+            constitution_claude_counterpart_path("global")
+            == tmp_path / ".claude" / "CLAUDE.md"
+        )
+
+    def test_claude_md_imports_agents_detects_import(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        claude = tmp_path / "CLAUDE.md"
+        claude.write_text(f"{IMPORT_LINE}\n\nbody")
+        assert claude_md_imports_agents(claude) is True
+
+    def test_agents_md_is_removable_catalog_content(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor"], "local")],
+            overwrite=True,
+            backup=False,
+        )
+        assert agents_md_is_removable(tmp_path / "AGENTS.md") is True
+
+    def test_agents_md_is_removable_user_content_without_force(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("custom")
+        assert agents_md_is_removable(agents, force=False) is False
+        assert agents_md_is_removable(agents, force=True) is True
+
+    def test_agents_removal_would_break_claude_import(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
+        agents = tmp_path / "AGENTS.md"
+        assert agents_removal_would_break_claude_import(
+            "local", agents, confirmed_claude=False
+        )
+        assert not agents_removal_would_break_claude_import(
+            "local", agents, confirmed_claude=True
+        )
+
+
 class TestRemoveConstitutionFile:
     def test_removes_catalog_agents_md(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -911,6 +967,44 @@ class TestRemoveConstitution:
         assert (tmp_path / "CLAUDE.md").exists()
         assert summary.removed == []
         assert any("CLAUDE.md" in entry for entry in summary.written)
+
+    def test_skips_agents_when_claude_imports_it(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
+        summary = remove_constitution(
+            ["cursor", "claude"],
+            "local",
+            confirmed_agents=True,
+            confirmed_claude=False,
+        )
+        assert (tmp_path / "AGENTS.md").exists()
+        assert (tmp_path / "CLAUDE.md").exists()
+        assert any("would break" in entry for entry in summary.skipped)
+
+    def test_removes_agents_when_broken_import_explicitly_allowed(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        run_mutations(
+            [ConstitutionMutation(DEFAULT_CONSTITUTION, ["cursor", "claude"], "local")],
+            overwrite=True,
+            backup=False,
+        )
+        summary = remove_constitution(
+            ["cursor", "claude"],
+            "local",
+            confirmed_agents=True,
+            confirmed_claude=False,
+            allow_broken_claude_import=True,
+        )
+        assert not (tmp_path / "AGENTS.md").exists()
+        assert (tmp_path / "CLAUDE.md").exists()
+        assert IMPORT_LINE in (tmp_path / "CLAUDE.md").read_text()
+        assert "AGENTS.md" in summary.removed
 
     def test_constitution_paths_local(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)

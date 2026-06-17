@@ -15,10 +15,12 @@ from siesta.utils.agents import (
     RuleMutation,
     SkillMutation,
     _display_path,
+    agents_removal_would_break_claude_import,
     available_constitutions,
     available_rules,
     available_skills,
     collect_confirmed_removals,
+    constitution_claude_counterpart_path,
     constitution_paths,
     detect_installed_rules,
     detect_installed_skills,
@@ -490,6 +492,12 @@ def remove_constitution_cmd(
     ``CLAUDE.md`` import stubs may be deleted; mixed content keeps the body and
     drops only the ``@AGENTS.md`` import line.
 
+    Removing ``AGENTS.md`` alone is blocked before any mutation when it would
+    leave ``CLAUDE.md`` with a broken ``@AGENTS.md`` import. The command
+    suggests manual cleanup (remove the pointer, copy content, or remove
+    ``CLAUDE.md`` too) and lets you stop, keep ``AGENTS.md``, or continue
+    with your selected removals anyway.
+
     Examples
     --------
     .. code-block:: bash
@@ -551,9 +559,49 @@ def remove_constitution_cmd(
         label = f"CLAUDE.md ({_display_path(claude_path)})"
         confirmed_claude = logger.confirm(f"Remove {label}?")
 
+    if (
+        confirmed_agents
+        and agents_path
+        and agents_removal_would_break_claude_import(
+            scope,
+            agents_path,
+            force=force,
+            confirmed_claude=confirmed_claude,
+        )
+    ):
+        counterpart = constitution_claude_counterpart_path(scope)
+        display_claude = _display_path(counterpart)
+        choice = logger.select(
+            f"Removing AGENTS.md would leave {display_claude} with a broken "
+            "@AGENTS.md pointer. Before removing AGENTS.md, you can manually: "
+            "remove the @AGENTS.md line from CLAUDE.md, copy the needed "
+            "AGENTS.md content into CLAUDE.md, or remove CLAUDE.md too. "
+            "What do you want to do now?",
+            [
+                "Stop now (no files changed)",
+                "Keep AGENTS.md and continue",
+                "Continue with selected removals anyway",
+            ],
+        )
+        if choice == "Stop now (no files changed)":
+            logger.abort("Aborted.")
+        elif choice == "Keep AGENTS.md and continue":
+            confirmed_agents = False
+
     if not confirmed_agents and not confirmed_claude:
         logger.info("No constitution files confirmed; nothing to do.")
         sys.exit(0)
+
+    allow_broken_claude_import = (
+        confirmed_agents
+        and agents_path is not None
+        and agents_removal_would_break_claude_import(
+            scope,
+            agents_path,
+            force=force,
+            confirmed_claude=confirmed_claude,
+        )
+    )
 
     # --- Execution phase ---
     summary = remove_constitution(
@@ -563,6 +611,7 @@ def remove_constitution_cmd(
         backup=backup,
         confirmed_agents=confirmed_agents,
         confirmed_claude=confirmed_claude,
+        allow_broken_claude_import=allow_broken_claude_import,
     )
     render_summary(summary)
 

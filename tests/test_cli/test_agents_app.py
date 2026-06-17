@@ -37,6 +37,15 @@ def confirm_no(_message: str, default: bool = True) -> bool:
     return False
 
 
+def confirm_agents_only_yes(message: str, default: bool = True) -> bool:
+    """Confirm AGENTS.md removal and decline CLAUDE.md."""
+    if "AGENTS.md" in message:
+        return True
+    if "CLAUDE.md" in message:
+        return False
+    return default
+
+
 # ---------------------------------------------------------------------------
 # add skill
 # ---------------------------------------------------------------------------
@@ -425,6 +434,97 @@ class TestRemoveConstitution:
         code = run("agents", "remove", "constitution", "--cursor")
         assert code != 0
         assert (tmp_path_chdir / "AGENTS.md").exists()
+
+    def test_stop_when_agents_removal_would_break_claude_import(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Stop now (no files changed)",
+        )
+        run("agents", "add", "constitution")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        assert agents.exists()
+        assert claude.exists()
+        code = run("agents", "remove", "constitution")
+        assert code != 0
+        assert agents.exists()
+        assert claude.exists()
+        assert IMPORT_LINE in claude.read_text()
+
+    def test_keep_agents_when_claude_import_would_break(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Keep AGENTS.md and continue",
+        )
+        run("agents", "add", "constitution")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        code = run("agents", "remove", "constitution")
+        assert code == 0
+        assert agents.exists()
+        assert claude.exists()
+        assert IMPORT_LINE in claude.read_text()
+
+    def test_removes_agents_anyway_when_user_accepts_broken_import(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Continue with selected removals anyway",
+        )
+        run("agents", "add", "constitution")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        code = run("agents", "remove", "constitution")
+        assert code == 0
+        assert not agents.exists()
+        assert claude.exists()
+        assert IMPORT_LINE in claude.read_text()
+
+    def test_cursor_only_detects_local_claude_import_dependency(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Stop now (no files changed)",
+        )
+        run("agents", "add", "constitution", "--cursor")
+        (tmp_path_chdir / "CLAUDE.md").write_text(IMPORT_LINE)
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        code = run("agents", "remove", "constitution", "--cursor")
+        assert code != 0
+        assert agents.exists()
+        assert claude.exists()
+
+    def test_removes_agents_when_claude_has_no_import(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        run("agents", "add", "constitution", "--both")
+        (tmp_path_chdir / "CLAUDE.md").write_text("user content only")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        run("agents", "remove", "constitution", "--both")
+        assert not agents.exists()
+        assert claude.read_text() == "user content only"
 
 
 # ---------------------------------------------------------------------------

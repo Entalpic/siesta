@@ -790,6 +790,47 @@ def constitution_paths(
     return agents_path, claude_path
 
 
+def constitution_claude_counterpart_path(scope: str) -> Path:
+    """Return the ``CLAUDE.md`` path that may import ``AGENTS.md`` for *scope*.
+
+    Unlike :func:`constitution_paths`, this ignores the selected Providers so
+    local ``--cursor`` removals still detect a project-level ``CLAUDE.md``.
+    """
+    if scope == "local":
+        return Path.cwd() / "CLAUDE.md"
+    return Path.home() / ".claude" / "CLAUDE.md"
+
+
+def claude_md_imports_agents(path: Path) -> bool:
+    """Return whether *path* exists and contains the ``@AGENTS.md`` import line."""
+    if not path.exists():
+        return False
+    return IMPORT_LINE in path.read_text(encoding="utf-8")
+
+
+def agents_md_is_removable(path: Path, *, force: bool = False) -> bool:
+    """Return whether *path* would be removed by :func:`remove_constitution_file`."""
+    if not path.exists():
+        return False
+    content = path.read_text(encoding="utf-8")
+    return content in _catalog_agents_md_contents() or force
+
+
+def agents_removal_would_break_claude_import(
+    scope: str,
+    agents_path: Path,
+    *,
+    force: bool = False,
+    confirmed_claude: bool = False,
+) -> bool:
+    """Return whether removing *agents_path* alone would break a ``CLAUDE.md`` import."""
+    if confirmed_claude:
+        return False
+    if not agents_md_is_removable(agents_path, force=force):
+        return False
+    return claude_md_imports_agents(constitution_claude_counterpart_path(scope))
+
+
 def resolve_remove_selection(
     names: list[str],
     detected: list[str],
@@ -1068,16 +1109,33 @@ def remove_constitution(
     backup: bool = False,
     confirmed_agents: bool = False,
     confirmed_claude: bool = False,
+    allow_broken_claude_import: bool = False,
 ) -> OperationSummary:
     """Remove Constitution files confirmed during the Prompt Collection Phase."""
     summary = OperationSummary()
     agents_path, claude_path = constitution_paths(providers, scope)
 
     if confirmed_agents and agents_path and agents_path.exists():
-        action, display = remove_constitution_file(
-            agents_path, force=force, backup=backup
-        )
-        _record_removal(summary, action, display)
+        if (
+            not allow_broken_claude_import
+            and agents_removal_would_break_claude_import(
+                scope,
+                agents_path,
+                force=force,
+                confirmed_claude=confirmed_claude,
+            )
+        ):
+            _record_removal(
+                summary,
+                "skipped",
+                _display_path(agents_path)
+                + " (would break CLAUDE.md @AGENTS.md import)",
+            )
+        else:
+            action, display = remove_constitution_file(
+                agents_path, force=force, backup=backup
+            )
+            _record_removal(summary, action, display)
 
     if confirmed_claude and claude_path and claude_path.exists():
         action, display = remove_constitution_file(
