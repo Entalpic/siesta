@@ -75,10 +75,11 @@ Every work item follows the same cycle:
 8. **Use wrap-up skill before close.** Follow lifecycle order: run `/wrap-up-branch` after commit/critique and before closing the issue. Wrap-up is not complete until the linked issue is transitioned to `agent:done` and closed.
 9. **Refuse guessing under uncertainty.** In the face of uncertainty, refuse the temptation to guess and ask the user.
 10. **Mark agent-authored issue content.** Every agent-authored issue comment/reply must end with `🤖` as the final non-whitespace character.
+11. **Never track the default branch.** A working branch must never have the default branch (`origin/main`) as its upstream. If detected, stop and warn the user before further work (the workflow skill has detection + remediation). Upstream is set only on the first push.
 
 ## Worktrees
 
-Issues with **`Branch: new`** (Agent TODO template) require a new branch and a **separate worktree** — see [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) for naming and `git worktree add` steps. For **`existing`**, use the named branch (worktree if one already exists). If the user's local clone does not use worktrees, ask how they want to handle it.
+Issues with **`Branch: new`** use a new branch in a dedicated worktree. When the agent is **already inside a worktree whose branch is not the default branch**, it first **asks whether to reuse the current worktree or create a new one**. For **`existing`**, use the named branch (worktree if one already exists). If the user's local clone does not use worktrees, ask how they want to handle it. See [`.skills/github-issue-workflow/SKILL.md`](.skills/github-issue-workflow/SKILL.md) for the worktree decision, `git worktree add` steps, and the upstream guard.
 
 ## Scouting
 

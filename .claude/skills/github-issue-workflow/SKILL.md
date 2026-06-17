@@ -97,7 +97,18 @@ gh issue comment <num> --body "Branch: \`feat-my-slug\` (new — worktree)
 
 ### Worktree for `new`
 
-When `branch_mode` is `new`, implement in a **separate worktree**, not the main checkout (AGENTS.md *Worktrees*):
+When `branch_mode` is `new`, implement in a dedicated worktree (AGENTS.md *Worktrees*).
+
+**First, decide which worktree.** Check the current branch:
+
+```bash
+git rev-parse --abbrev-ref HEAD
+```
+
+- If it is the **default branch** (`main`), create a new worktree (below).
+- If it is **not** the default branch (you are already inside a side-branch worktree), **ask the user**: reuse the current worktree, or create a new one? Do not assume.
+
+Create a new worktree (when chosen):
 
 ```bash
 # From repo root; adjust default branch if not main
@@ -105,13 +116,30 @@ git fetch origin main
 SLUG="my-slug"   # from naming steps above, without prefix
 BRANCH="feat-${SLUG}"
 WT="../$(basename "$PWD")-${SLUG}"
-git worktree add -b "$BRANCH" "$WT" origin/main
+git worktree add -b "$BRANCH" --no-track "$WT" origin/main
 cd "$WT"
 ```
+
+`--no-track` is required: it creates the branch from `origin/main`'s tip **without** setting `origin/main` as upstream. Upstream is established only on the first push (`git push -u origin HEAD`, done at wrap-up), which tracks `origin/<branch>`.
 
 If the user does not use worktrees, or worktrees live elsewhere, **ask** before falling back to an in-place branch checkout.
 
 For `existing`, prefer a worktree on that branch when one already exists; otherwise `git worktree add <path> <branch_name>` or checkout per user preference.
+
+### Upstream guard (always — `new` and `existing`)
+
+Before doing any work on the chosen branch, verify it does not track the default branch (AGENTS.md rule *Never track the default branch*):
+
+```bash
+git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null
+```
+
+- **No upstream** (empty / non-zero exit) → fine; upstream is set on the first push. Proceed.
+- **`origin/main`** (the default branch) → **stop and warn the user**. Do **not** auto-fix. Show the remediation and wait for the user before any further work:
+
+```bash
+git branch --unset-upstream
+```
 
 ## Claim and state transitions
 
