@@ -180,15 +180,15 @@ def init_docs(
     summary = run_mutations(
         [
             InitDocsMutation(
-                path,
-                bool(as_main_deps),
-                deps,
-                with_uv,
-                interactive,
-                branch,
-                contents,
-                remote_assets,
-                project_name,
+                path=path,
+                as_main_deps=bool(as_main_deps),
+                deps=deps,
+                with_uv=with_uv,
+                interactive=interactive,
+                branch=branch,
+                contents=contents,
+                remote_assets=remote_assets,
+                project_name=project_name,
             )
         ],
         overwrite=overwrite,

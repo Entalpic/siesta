@@ -315,15 +315,15 @@ def quickstart_project(
     if docs:
         mutations.append(
             InitDocsMutation(
-                docs_path,
-                bool(as_main_deps),
-                deps,
-                bool(docs_with_uv),
-                False,
-                branch,
-                contents,
-                remote_assets,
-                project_name,
+                path=docs_path,
+                as_main_deps=bool(as_main_deps),
+                deps=deps,
+                with_uv=bool(docs_with_uv),
+                interactive=False,
+                branch=branch,
+                contents=contents,
+                remote_assets=remote_assets,
+                project_name=project_name,
             )
         )
     if agents:
