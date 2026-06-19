@@ -16,6 +16,7 @@ from github import (
     UnknownObjectException,
 )
 from github.Auth import Token
+from github.ContentFile import ContentFile
 from github.Repository import Repository
 from keyring import get_password
 
@@ -44,7 +45,7 @@ def get_user_pat():
 
 def search_contents(
     repo: Repository, branch: str = "main", content_path: str = "boilerplate"
-) -> list[tuple[str, str]]:
+) -> list[tuple[str, bytes]]:
     """Get the (deep) contents of a directory.
 
     Parameters
@@ -84,14 +85,18 @@ def search_contents(
             # we'll remove the hierarchy of the folder from the path
             extra_path = extra_path + "/"
 
-    data = []
+    data: list[tuple[str, bytes]] = []
     while contents:
-        file_content = contents.pop(0)
+        file_content: ContentFile = contents.pop(0)
         if file_content.type == "dir":
-            contents.extend(repo.get_contents(file_content.path, ref=branch))
+            dir_contents = repo.get_contents(file_content.path, ref=branch)
+            if isinstance(dir_contents, list):
+                contents.extend(dir_contents)
+            else:
+                contents.append(dir_contents)
         else:
             logger.clear_line()
-            logger.info(f"Downloading contents of '{file_content.path}'", end="\r")
+            logger.info(f"Downloading contents of '{file_content.path}'")
             # adjust file path
             new_relative_path = file_content.path.replace(extra_path, "")
             if new_relative_path.startswith("/"):
@@ -111,7 +116,7 @@ def fetch_github_files(
     branch: str = "main",
     content_path: str = "src/siesta/boilerplate",
     dir: str = ".",
-) -> Path:
+) -> None:
     """Download a file or directory from a GitHub repository and write it to ``dir``.
 
     Parameters
@@ -125,8 +130,7 @@ def fetch_github_files(
 
     Returns
     -------
-    Path
-        The path to the temporary folder containing the files.
+    None
     """
     pat = get_user_pat()
     if not pat:

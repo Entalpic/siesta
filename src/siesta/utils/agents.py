@@ -625,8 +625,8 @@ def quickstart_asset_mutations(
     if cfg is None:
         cfg = load_quickstart()
 
-    skills = list(cfg["skills"])
-    rules = list(cfg["rules"])
+    skills: list[str] = list(cfg["skills"])
+    rules: list[str] = list(cfg["rules"])
     constitution = cfg["constitution"]
 
     unknown_skills = [s for s in skills if s not in available_skills()]
@@ -1146,14 +1146,11 @@ def remove_constitution(
     agents_path, claude_path = constitution_paths(providers, scope)
 
     if confirmed_agents and agents_path and agents_path.exists():
-        if (
-            not allow_broken_claude_import
-            and agents_removal_would_break_claude_import(
-                scope,
-                agents_path,
-                force=force,
-                confirmed_claude=confirmed_claude,
-            )
+        if not allow_broken_claude_import and agents_removal_would_break_claude_import(
+            scope,
+            agents_path,
+            force=force,
+            confirmed_claude=confirmed_claude,
         ):
             _record_removal(
                 summary,
