@@ -155,6 +155,8 @@ relevant sections here:
 | [0003](docs/adr/0003-secret-handling-policy.md) | Secret Handling Policy | PAT handling in `self_app` / `github` |
 | [0004](docs/adr/0004-cross-provider-agent-assets.md) | Cross-Provider Agent Asset Installation | Providers, Asset Scope, Mirroring |
 | [0005](docs/adr/0005-nested-agent-asset-operations.md) | Nested Agent Asset Operations | `agents add` / `agents remove` command shape |
+| [0006](docs/adr/0006-conflict-resolution-in-prompt-collection-phase.md) | Conflict Resolution in Prompt Collection Phase | Ordering Contract / Conflict Resolution |
+| [0007](docs/adr/0007-unified-conflict-resolution-seam.md) | Unified Conflict-Resolution Seam | `Mutation` Protocol, `Resolution` model, `--overwrite`/`--backup` |
 
 ## Core Concepts
 
@@ -189,13 +191,9 @@ delegates to `setup_tests(...)` and `init_docs(...)`, it calls them with
 
 ### Mutation & the Conflict-Aware Writer
 
-A **Mutation** is any filesystem write or external side effect. All Agent-Asset writes
-funnel through a single conflict policy in [agents.py](src/siesta/utils/agents.py#L315-L464):
-`_decide_action` maps `(dest exists?, --force, --backup, -i)` to one of `write`,
-`overwrite`, `backup_write`, or `skip`; `write_file` / `write_dir` then apply it. The
-non-interactive default for an existing target is **skip** (never silently clobber).
-Outcomes are accumulated into a `{written, skipped, backed_up}` summary and rendered by
-`print_summary`.
+A **Mutation** is any filesystem write or external side effect. All mutating commands share one seam in [conflicts.py](src/siesta/utils/conflicts.py): each operation implements `detect_conflicts() → list[Conflict]` (pure, Prompt Collection Phase) and `apply(resolutions) → OperationSummary` (Execution Phase). A driver, `run_mutations`, resolves every conflict via `resolve_conflict` (driven by `--overwrite` / `--backup` or an interactive prompt) before the first `apply()`.
+
+**Resolution** is a five-outcome enum (`skip`, `overwrite`, `backup`, `abort`, `merge`); each `Conflict` exposes only the applicable subset. `merge` is the content-preserving prepend for an existing `CLAUDE.md`. Low-level writes go through `write_path`; outcomes accumulate in `OperationSummary` and render via `render_summary`.
 
 ### Providers, Asset Scope, and Mirroring
 
@@ -237,7 +235,10 @@ The **Constitution** model is the subtlest: `AGENTS.md` is the **source of truth
 *always* written (Cursor compatibility, harmless for Claude); `CLAUDE.md` is merely an
 `@AGENTS.md` import stub. When a `CLAUDE.md` already exists, the installer **prepends** the
 import line rather than overwriting, preserving user content
-([agents.py:672](src/siesta/utils/agents.py#L672)).
+([agents.py:672](src/siesta/utils/agents.py#L672)). On removal, `agents remove constitution`
+must not delete `AGENTS.md` while leaving a `CLAUDE.md` that still imports it — the command
+surfaces that cross-file dependency during Prompt Collection and suggests manual cleanup
+rather than rewriting `CLAUDE.md` automatically.
 
 ### Install Summary
 
@@ -269,10 +270,13 @@ Add commands are thin: they resolve scope/providers/selection (Validation Phase)
 then loop over installers (Execution Phase). Remove commands follow a stricter
 validate → collect per-candidate confirmations → mutate flow: every detected
 removal target is confirmed through questionary before any file is deleted or
-rewritten. All catalog discovery, installed-asset detection, path resolution,
+rewritten. Constitution removal additionally checks whether deleting `AGENTS.md`
+alone would leave `CLAUDE.md` with a broken `@AGENTS.md` import (including
+local `--cursor` runs where both files coexist). All catalog discovery, installed-asset detection, path resolution,
 ``.mdc`` translation, the conflict-aware writer, conservative Constitution
 removal, and the `quickstart.yaml` loader live in `utils/agents`.
-`install_quickstart` validates every name in the **Quickstart Config** against the catalog
+`agents quickstart -i` collects category selections from the **Quickstart Config**
+before Mutation; `install_quickstart` validates every selected name against the catalog
 before any write, then reuses the per-asset installers.
 
 ### `project_app` + `utils/project`

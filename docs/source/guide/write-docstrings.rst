@@ -5,18 +5,10 @@
 How to write docstrings
 #######################
 
-.. note::
-
-    This section is still under construction. It will evolve as the code base matures
-
 Basics
 ------
 
 In the :doc:`previous section </guide/write-documentation>`, we learned about the syntax of ``rst`` to write documentation and docstrings. In this section, we'll look at how to write the content of a good docstring.
-
-.. caution::
-
-    This section is still under construction. It will be finished soon.
 
 .. note::
 
@@ -229,7 +221,7 @@ The following code renders as: :meth:`siesta.logger.BaseLogger.dummy`.
         * functions with :func:`siesta.utils.safe_dump`
         * classes with :class:`siesta.logger.Logger`
         * methods with :meth:`siesta.logger.Logger.prompt`
-        * constants with :const:`siesta.cli.app`
+        * constants with :const:`siesta.cli.main_app.app`
 
         Prepend with ``~`` to refer to the name of the object only instead of the full
         path -> :func:`~siesta.utils.safe_dump` will display as ``safe_dump``
@@ -324,7 +316,7 @@ There's an easy way to check: use a tool called `pydocstyle <https://www.pydocst
 
 .. code-block:: bash
 
-    $ pydocstyle --convention=numpy --add-ignore=D212 src/siesta/cli.py
+    $ pydocstyle --convention=numpy --add-ignore=D212 src/siesta/cli/
     $ pydocstyle --convention=numpy --add-ignore=D212 src/
 
 ..

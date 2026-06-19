@@ -15,6 +15,7 @@ dependencies = [
     "packaging>=24.0",
     "platformdirs>=4.0.0",
     "questionary==2.1.1",
+    "pytest-xdist[psutil]>=3.8.0",
 ]
 
 [project.scripts]

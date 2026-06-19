@@ -31,19 +31,39 @@ def test_init_docs_basic(temp_project_with_git_and_remote, monkeypatch):
 def test_init_docs_no_overwrite(
     temp_project_with_git_and_remote, monkeypatch, capture_output
 ):
-    """Test that docs init fails when docs exist and --overwrite is not used."""
+    """Test that docs init fails when a non-empty docs folder exists and --overwrite is not used."""
     monkeypatch.chdir(temp_project_with_git_and_remote)
 
-    # Create docs dir
+    # A non-empty docs dir is a Conflict (an empty one would simply be populated).
+    docs_dir = temp_project_with_git_and_remote / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "existing.rst").write_text("keep me")
+
+    with capture_output() as output:
+        with pytest.raises(SystemExit) as exc_info:
+            app(["docs", "init"])
+        assert "already exists" in output.getvalue()
+
+    assert exc_info.value.code == 1
+
+
+def test_init_docs_empty_dir_is_not_conflict(
+    temp_project_with_git_and_remote, monkeypatch, capture_output
+):
+    """An empty docs folder is not a Conflict — init populates it without prompting."""
+    monkeypatch.chdir(temp_project_with_git_and_remote)
+
+    # Pre-existing but empty docs dir: nothing to overwrite, so no conflict.
     docs_dir = temp_project_with_git_and_remote / "docs"
     docs_dir.mkdir()
 
-    with pytest.raises(SystemExit) as exc_info:
-        with capture_output() as output:
+    with capture_output():
+        try:
             app(["docs", "init"])
-        assert "Path already exists" in output.getvalue()
+        except SystemExit as e:
+            assert e.code == 0
 
-    assert exc_info.value.code == 1
+    assert (docs_dir / "source" / "conf.py").exists()
 
 
 def test_init_docs_with_overwrite(
@@ -65,6 +85,25 @@ def test_init_docs_with_overwrite(
     assert "Failed to build the docs" not in output.getvalue()
 
     assert not (docs_dir / "marker.txt").exists()
+    assert (docs_dir / "source" / "conf.py").exists()
+
+
+def test_init_docs_with_backup(
+    temp_project_with_git_and_remote, monkeypatch, capture_output
+):
+    """Test that --backup renames existing docs to docs.bak before init."""
+    monkeypatch.chdir(temp_project_with_git_and_remote)
+    docs_dir = temp_project_with_git_and_remote / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "marker.txt").write_text("original content")
+
+    with capture_output():
+        try:
+            app(["docs", "init", "--overwrite", "--backup"])
+        except SystemExit as e:
+            assert e.code == 0
+
+    assert (temp_project_with_git_and_remote / "docs.bak" / "marker.txt").exists()
     assert (docs_dir / "source" / "conf.py").exists()
 
 

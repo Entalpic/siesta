@@ -167,3 +167,25 @@ def test_checkbox_empty_choices_skips_questionary(logger, monkeypatch):
 
     monkeypatch.setattr("siesta.logger.questionary.checkbox", fail_checkbox)
     assert logger.checkbox("Select items:", []) == []
+
+
+def test_checkbox_checked_choices_are_preselected(logger, monkeypatch):
+    captured = {}
+
+    class Prompt:
+        def ask(self):
+            return ["a", "b"]
+
+    def fake_checkbox(message, choices):
+        captured["message"] = message
+        captured["choices"] = choices
+        return Prompt()
+
+    monkeypatch.setattr("siesta.logger.questionary.checkbox", fake_checkbox)
+
+    assert logger.checkbox("Select items:", ["a", "b"], checked=["a", "b"]) == [
+        "a",
+        "b",
+    ]
+    assert [choice.value for choice in captured["choices"]] == ["a", "b"]
+    assert [choice.checked for choice in captured["choices"]] == [True, True]

@@ -1,4 +1,5 @@
 .. Copyright 2025 Entalpic
+
 Siesta User Guide
 =================
 
@@ -6,7 +7,7 @@ This page contains leads to the documentation of the ``siesta`` package.
 
 The API reference was auto-generated with ``autoapi`` [#f1]_.
 
-You can see the source code on `Github <https://github.com/Entalpic/siesta>`_ and explore the rendered documentation here ⬇️
+You can see the source code on `GitHub <https://github.com/Entalpic/siesta>`_ and explore the rendered documentation here ⬇️
 
 Installation
 ------------
@@ -24,16 +25,23 @@ TL;DR
 
 .. code-block:: bash
 
-   # 1️⃣ Start new project
+   # Start a new project (uv init + deps + tests + docs + Agent Assets)
    $ siesta project quickstart
-   # 1️⃣ Initialize docs in existing project
+
+   # Add docs to an existing project
    $ siesta docs init
 
-   # 2️⃣ Build docs
+   # Install curated Agent Assets (Skills, Rules, Constitution)
+   $ siesta agents quickstart
+
+   # Build docs
    $ siesta docs build
 
-   # 3️⃣ Open docs in browser
+   # Open docs in browser
    $ siesta docs open
+
+   # Enable tab completions (bash / zsh)
+   $ siesta self tab-completions install
 
 
 Contributing

@@ -1,5 +1,7 @@
 .. Copyright 2025 Entalpic
 
+:orphan:
+
 About
 -----
 

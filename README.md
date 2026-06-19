@@ -26,19 +26,25 @@ Use `siesta` to initialize
     siesta docs init
     ```
 
-4. Build the docs locally
+4. Install Agent Assets (Skills, Rules, Constitution) in the current repo
+
+    ```bash
+    siesta agents quickstart
+    ```
+
+5. Build the docs locally
 
     ```bash
     siesta docs build
     ```
 
-5. Watch for changes and auto-rebuild the docs
+6. Watch for changes and auto-rebuild the docs
 
     ```bash
     siesta docs watch
     ```
 
-6. Check for updates and upgrade siesta
+7. Check for updates and upgrade siesta
 
     ```bash
     siesta self version
@@ -46,7 +52,7 @@ Use `siesta` to initialize
     ```
 
 > [!NOTE]
-> You can always get help with `siesta --help` or `siesta docs --help` or `siesta project --help` or `siesta self --help`
+> You can always get help with `siesta --help` or `siesta docs --help` or `siesta project --help` or `siesta agents --help` or `siesta self --help`
 
 ## Installation
 
@@ -86,8 +92,4 @@ That's it 🤓
 
 ## Status 🏗️
 
-This is still very WIP. In particular, next steps:
-
--   Update Contribution Guide
--   Add ReadTheDocs deployment instructions
--   More tests
+Actively developed. See the [GitHub issues](https://github.com/Entalpic/siesta/issues) for the current backlog.

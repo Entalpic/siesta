@@ -14,7 +14,7 @@ Home
    self
    guide/index
 
-Welcome to the siesta 🥳
+Welcome to siesta
 
 This repository serves as both a tutorial for Python project documentation (including docstrings) **AND** a CLI tool to initialize a Python project with standard Entalpic initial setup.
 

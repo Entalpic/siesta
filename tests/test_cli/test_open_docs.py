@@ -1,4 +1,5 @@
 # Copyright 2025 Entalpic
+import re
 from unittest.mock import patch
 
 import pytest
@@ -70,4 +71,4 @@ def test_open_docs(module_test_path, capture_output, platform, monkeypatch):
                             )
                         )
     assert "Opening" in output.getvalue()
-    assert "index.html" in output.getvalue()
+    assert re.search("index.html", output.getvalue().replace("\n", ""))

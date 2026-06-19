@@ -1,13 +1,30 @@
 # Copyright 2025 Entalpic
 """Utility functions related to the ``siesta project`` subcommand."""
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
+from shutil import rmtree
 from textwrap import dedent
 
 import requests
 from packaging.utils import canonicalize_name
 
-from siesta.utils.common import get_pyver, logger, safe_dump
+from siesta.utils.common import (
+    get_pyver,
+    logger,
+    resolve_path,
+    run_command,
+    safe_dump,
+    write_or_update_pre_commit_file,
+)
+from siesta.utils.conflicts import (
+    Conflict,
+    OperationSummary,
+    Resolution,
+    apply_backup,
+    is_occupied,
+)
 
 
 def write_test_actions_config() -> None:
@@ -18,9 +35,6 @@ def write_test_actions_config() -> None:
     """
     github_dir = Path(".github")
     workflows_dir = github_dir / "workflows"
-    if workflows_dir.exists():
-        logger.warning("Workflows directory already exists. Skipping.")
-        return
     workflows_dir.mkdir(parents=True, exist_ok=True)
     test_config = {
         "name": "Tests",
@@ -75,7 +89,7 @@ def write_test_actions_config() -> None:
                     },
                     {
                         "name": "Run tests",
-                        "run": "uv run pytest",
+                        "run": "uv run pytest -n auto",
                     },
                 ],
             },
@@ -112,9 +126,6 @@ def write_tests_infra(project_name: str) -> None:
     """
     tests_dir = Path("tests")
     import_name = _python_import_name(project_name)
-    if tests_dir.exists():
-        logger.warning("Tests directory already exists. Skipping.")
-        return
     tests_dir.mkdir(parents=True, exist_ok=True)
     test_example = dedent(rf'''
     # Copyright 2025 Entalpic
@@ -180,28 +191,32 @@ _IPDB_BLOCK = dedent(
 )
 
 
+def _first_init_path() -> Path | None:
+    """Return the shallowest ``src/**/__init__.py``, matching ``add_ipdb_as_debugger``."""
+    inits = list(Path("src/").glob("**/__init__.py"))
+    if not inits:
+        return None
+    return sorted([(i, len(str(i).split("/"))) for i in inits], key=lambda x: x[1])[0][
+        0
+    ]
+
+
 def add_ipdb_as_debugger(overwrite: bool = False) -> None:
     """Set ``ipdb`` as default debugger to the project.
 
     This will set ``ipdb`` as default debugger when calling ``breakpoint()`` by setting the
     ``PYTHONBREAKPOINT`` environment variable to ``ipdb.set_trace``.
     """
-    inits = list(Path("src/").glob("**/__init__.py"))
-    if not inits:
+    first_init = _first_init_path()
+    if first_init is None:
         logger.warning("No __init__.py files found. Skipping ipdb debugger.")
         return
-
-    first_init = sorted(
-        [(i, len(str(i).split("/"))) for i in inits], key=lambda x: x[1]
-    )[0][0]
 
     existing = first_init.read_text()
     if "PYTHONBREAKPOINT" in existing:
         if not overwrite:
             logger.warning("ipdb already configured. Skipping.")
             return
-        # Remove the siesta-added block before re-appending.
-        # If the user has their own PYTHONBREAKPOINT setup (_IPDB_BLOCK not found), append anyway.
         if _IPDB_BLOCK in existing:
             existing = existing.replace(_IPDB_BLOCK, "")
 
@@ -217,12 +232,9 @@ def download_python_gitignore() -> str:
     return response.text
 
 
-def write_gitignore(overwrite: bool = False) -> None:
+def write_gitignore() -> None:
     """Write the gitignore file to the ``.gitignore`` file."""
     gitignore_path = Path(".gitignore")
-    if gitignore_path.exists() and not overwrite:
-        logger.warning(".gitignore already exists. Skipping.")
-        return
     python_gitignore = "\n".join(
         line.rstrip() for line in download_python_gitignore().splitlines()
     )
@@ -232,3 +244,330 @@ def write_gitignore(overwrite: bool = False) -> None:
     .DS_Store
     """)
     gitignore_path.write_text(gitignore + python_gitignore + "\n")
+
+
+# ---------------------------------------------------------------------------
+# Project mutations
+# ---------------------------------------------------------------------------
+
+_STD_OPTIONS = frozenset(
+    {Resolution.SKIP, Resolution.OVERWRITE, Resolution.BACKUP, Resolution.ABORT}
+)
+
+
+@dataclass
+class UvInitMutation:
+    """Initialize a uv project with ``uv init``.
+
+    Built by ``project quickstart`` when uv-init is requested. Treats an existing
+    ``pyproject.toml``/``uv.lock`` as a Conflict (skip or abort); on a clean directory
+    it runs ``uv init`` with the chosen app/package/library layout.
+    """
+
+    project_name: str
+    as_app: bool
+    as_pkg: bool
+    run_requested: bool
+
+    def detect_conflicts(self) -> list[Conflict]:
+        if self.run_requested and (
+            Path("uv.lock").exists() or Path("pyproject.toml").exists()
+        ):
+            return [
+                Conflict(
+                    key="uv_init",
+                    name="uv project (pyproject.toml or uv.lock already exists)",
+                    options=frozenset({Resolution.SKIP, Resolution.ABORT}),
+                )
+            ]
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        if "uv_init" in resolutions:
+            if resolutions["uv_init"] is Resolution.SKIP:
+                logger.info("Skipping uv init — project already initialized.")
+                return summary
+            return summary
+        cmd = ["uv", "init", f"--name={self.project_name}"]
+        if self.as_app:
+            pass
+        elif self.as_pkg:
+            cmd.append("--package")
+        else:
+            cmd.append("--lib")
+        if run_command(cmd) is False:
+            logger.abort("Failed to initialize the project.")
+        logger.info("Project initialized with uv.")
+        return summary
+
+
+@dataclass
+class DepsMutation:
+    """Install the project's dev dependencies via ``uv add --dev``.
+
+    Built by ``project quickstart``. Never conflicts — it only adds dependencies.
+    """
+
+    deps: list[str]
+
+    def detect_conflicts(self) -> list[Conflict]:
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        if run_command(["uv", "add", "--dev"] + self.deps) is False:
+            logger.abort("Failed to install the dev dependencies.")
+        logger.info("Dev dependencies installed.")
+        return OperationSummary()
+
+
+@dataclass
+class TestDepsMutation:
+    """Install test dependencies (``pytest``, ``pytest-cov``) with uv or pip.
+
+    Built by ``project setup-tests``. Never conflicts — it only adds dependencies.
+    """
+
+    test_deps: list[str]
+    has_uv: bool
+
+    def detect_conflicts(self) -> list[Conflict]:
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        if self.has_uv:
+            if run_command(["uv", "add", "--dev"] + self.test_deps) is False:
+                logger.abort("Failed to install test dependencies.")
+            logger.info("Test dependencies installed with uv.")
+        else:
+            if run_command(["pip", "install"] + self.test_deps) is False:
+                logger.abort("Failed to install test dependencies.")
+            logger.info("Test dependencies installed with pip.")
+        return OperationSummary()
+
+
+@dataclass
+class PrecommitMutation:
+    """Write the pre-commit config and install its git hooks.
+
+    Built by ``project quickstart``. Never conflicts — the config is written or updated
+    in place.
+    """
+
+    def detect_conflicts(self) -> list[Conflict]:
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        write_or_update_pre_commit_file()
+        if run_command(["uv", "run", "pre-commit", "install"]) is False:
+            logger.abort("Failed to install pre-commit hooks.")
+        logger.info("Pre-commit hooks installed.")
+        return OperationSummary()
+
+
+@dataclass
+class IpdbMutation:
+    """Set ``ipdb`` as the default debugger via ``PYTHONBREAKPOINT``.
+
+    Built by ``project quickstart``. Treats an already-configured ``PYTHONBREAKPOINT``
+    as a Conflict (skip, overwrite, or abort).
+    """
+
+    def detect_conflicts(self) -> list[Conflict]:
+        first_init = _first_init_path()
+        if first_init and "PYTHONBREAKPOINT" in first_init.read_text():
+            return [
+                Conflict(
+                    key="ipdb",
+                    name="ipdb debugger (PYTHONBREAKPOINT already present)",
+                    options=frozenset(
+                        {Resolution.SKIP, Resolution.OVERWRITE, Resolution.ABORT}
+                    ),
+                )
+            ]
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        resolution = resolutions.get("ipdb")
+        if resolution is Resolution.SKIP:
+            summary.skipped.append("ipdb debugger")
+            return summary
+        overwrite = resolution is Resolution.OVERWRITE
+        add_ipdb_as_debugger(overwrite=overwrite)
+        # Record the write whether it was a fresh add (no conflict, resolution None)
+        # or an overwrite — both produced a change render_summary should report.
+        summary.written.append("ipdb debugger")
+        logger.info("[r]ipdb[/r] added as debugger.")
+        return summary
+
+
+@dataclass
+class TestsInfraMutation:
+    """Write the test scaffolding (``tests/test_import.py``).
+
+    Built by ``project quickstart`` and ``project setup-tests``. Treats an existing
+    ``tests/test_import.py`` as a Conflict.
+    """
+
+    project_name: str
+
+    def detect_conflicts(self) -> list[Conflict]:
+        if is_occupied(Path("tests/test_import.py")):
+            return [
+                Conflict(
+                    key="tests",
+                    name="tests/test_import.py",
+                    options=_STD_OPTIONS,
+                )
+            ]
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        dest = Path("tests/test_import.py")
+        resolution = resolutions.get("tests")
+        if resolution is Resolution.SKIP:
+            summary.skipped.append(str(dest))
+            return summary
+        if resolution is Resolution.BACKUP:
+            apply_backup(dest)
+            summary.backed_up.append(str(dest))
+        write_tests_infra(self.project_name)
+        summary.written.append(str(dest))
+        logger.info("Tests infra written.")
+        return summary
+
+
+@dataclass
+class TestActionsMutation:
+    """Write the GitHub Actions test workflow (``.github/workflows/test.yml``).
+
+    Built by ``project quickstart`` and ``project setup-tests``. Treats an existing
+    workflow file as a Conflict.
+    """
+
+    def detect_conflicts(self) -> list[Conflict]:
+        dest = Path(".github/workflows/test.yml")
+        if is_occupied(dest):
+            return [
+                Conflict(
+                    key="actions",
+                    name=".github/workflows/test.yml",
+                    options=_STD_OPTIONS,
+                )
+            ]
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        dest = Path(".github/workflows/test.yml")
+        resolution = resolutions.get("actions")
+        if resolution is Resolution.SKIP:
+            summary.skipped.append(str(dest))
+            return summary
+        if resolution is Resolution.BACKUP:
+            apply_backup(dest)
+            summary.backed_up.append(str(dest))
+        write_test_actions_config()
+        summary.written.append(str(dest))
+        logger.info("Test actions config written.")
+        return summary
+
+
+@dataclass
+class GitignoreMutation:
+    """Write the project ``.gitignore``.
+
+    Built by ``project quickstart``. Treats an existing ``.gitignore`` as a Conflict.
+    """
+
+    def detect_conflicts(self) -> list[Conflict]:
+        if is_occupied(Path(".gitignore")):
+            return [
+                Conflict(
+                    key="gitignore",
+                    name=".gitignore",
+                    options=_STD_OPTIONS,
+                )
+            ]
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        dest = Path(".gitignore")
+        resolution = resolutions.get("gitignore")
+        if resolution is Resolution.SKIP:
+            summary.skipped.append(str(dest))
+            return summary
+        if resolution is Resolution.BACKUP:
+            apply_backup(dest)
+            summary.backed_up.append(str(dest))
+        write_gitignore()
+        summary.written.append(str(dest))
+        logger.info("Gitignore written.")
+        return summary
+
+
+@dataclass
+class InitDocsMutation:
+    """Scaffold a new Sphinx documentation folder.
+
+    Built by ``docs init`` and ``project quickstart``. Treats an existing docs folder
+    as a Conflict; :meth:`apply` honours the resolved action (backup or overwrite),
+    then delegates the actual scaffolding — boilerplate copy, dependency install, and
+    initial build — to :func:`siesta.cli.docs_app._execute_docs_init`.
+    """
+
+    path: str
+    as_main_deps: bool
+    deps: bool
+    with_uv: bool
+    interactive: bool
+    branch: str
+    contents: str
+    remote_assets: bool
+    project_name: str | None
+
+    def detect_conflicts(self) -> list[Conflict]:
+        if is_occupied(resolve_path(self.path)):
+            return [
+                Conflict(
+                    key="docs",
+                    name=f"docs at {self.path}",
+                    options=_STD_OPTIONS,
+                )
+            ]
+        return []
+
+    def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary:
+        summary = OperationSummary()
+        dest = resolve_path(self.path)
+        resolution = resolutions.get("docs")
+        if resolution is Resolution.SKIP:
+            summary.skipped.append(str(dest))
+            return summary
+        # Honour the resolved Conflict before scaffolding: a chosen backup renames the
+        # existing folder, while a plain overwrite clears it so no stale files survive.
+        if resolution is Resolution.BACKUP:
+            apply_backup(dest)
+            summary.backed_up.append(str(dest))
+        elif resolution is Resolution.OVERWRITE and dest.exists():
+            rmtree(dest)
+        # Deferred import keeps the util → cli direction one-way (cli imports this class).
+        from siesta.cli.docs_app import _execute_docs_init
+
+        _execute_docs_init(
+            path=self.path,
+            as_main_deps=self.as_main_deps,
+            deps=self.deps,
+            with_uv=self.with_uv,
+            interactive=self.interactive,
+            branch=self.branch,
+            contents=self.contents,
+            remote_assets=self.remote_assets,
+            project_name=self.project_name,
+        )
+        if resolution is not Resolution.BACKUP:
+            summary.written.append(str(dest))
+        return summary

@@ -39,10 +39,10 @@ User interruption during prompt collection that exits with code 130 at the CLI e
 _Avoid_: abort, quit
 
 **Conflict**:
-An artifact that existed on disk _before the run started_ and that a Mutation would overwrite or corrupt if run unconditionally. Scope is pre-run: an artifact a prior Mutation produced within the same run (for example the `.gitignore` that `uv init` writes during `quickstart`) is not a Conflict — it is a byproduct of the pipeline, and a later step that owns that artifact may overwrite it freely.
+An artifact that existed on disk _before the run started_ and that a Mutation would overwrite or corrupt if run unconditionally. An empty directory is not a Conflict — it is a vacant container with nothing to lose, so a Mutation may populate it freely. A file is different: any existing file is a Conflict, even a zero-byte one, because an empty file can be intentional (a package's `__init__.py`, a `py.typed` marker) and must not be clobbered silently. Scope is also pre-run: an artifact a prior Mutation produced within the same run (for example the `.gitignore` that `uv init` writes during `quickstart`) is not a Conflict — it is a byproduct of the pipeline, and a later step that owns that artifact may overwrite it freely.
 
 **Conflict Resolution**:
-The sub-process within the Prompt Collection Phase where each detected Conflict is surfaced to the user, who declares skip, overwrite, or abort. All Conflict Resolutions are collected before the first Mutation — guaranteeing that Abort leaves the project state identical to its pre-run state.
+The sub-process within the Prompt Collection Phase where each detected Conflict is surfaced to the user, who declares skip, overwrite, backup, abort, or merge (each Conflict exposes only the applicable subset; merge is the content-preserving prepend used for an existing `CLAUDE.md`). All Conflict Resolutions are collected before the first Mutation — guaranteeing that Abort leaves the project state identical to its pre-run state.
 _Avoid_: guard, check, validation (those are Validation Phase terms)
 
 **Abort**:
@@ -96,7 +96,7 @@ Whether an Agent Asset is installed for the current repository (local) or the us
 _Avoid_: location, target
 
 **Quickstart Config**:
-The bundled declaration (`agents_assets/quickstart.yaml`) listing which Agent Assets `siesta agents quickstart` installs by default — the curated default subset of the Agent Asset Catalog. It is NOT an Agent Asset itself, so the "avoid: config" guidance on **Agent Asset** still applies to Skills/Rules/Constitutions.
+The bundled declaration (`agents_assets/quickstart.yaml`) listing which Agent Assets `siesta agents quickstart` installs by default, and which curated entries an interactive quickstart may select from — the curated default subset of the Agent Asset Catalog. It is NOT an Agent Asset itself, so the "avoid: config" guidance on **Agent Asset** still applies to Skills/Rules/Constitutions.
 
 ### Security
 
@@ -126,7 +126,7 @@ The rule that branch commits and PR context use `Refs #<num>` for linkage, while
 ## Relationships
 
 - An **Agent Asset Catalog** contains **Skills**, **Rules**, and **Constitutions**; it is the only install source (bundled, no network).
-- The **Quickstart Config** selects a subset of the **Agent Asset Catalog**; running `siesta agents quickstart` is equivalent to running the individual `agents add` commands for each listed asset.
+- The **Quickstart Config** selects a subset of the **Agent Asset Catalog**; by default, running `siesta agents quickstart` is equivalent to running the individual `agents add` commands for each listed asset.
 - A **Constitution** is rendered as `AGENTS.md` (source of truth) plus, for the Claude **Provider**, a `CLAUDE.md` `@AGENTS.md` stub.
 - A **Rule** has exactly one canonical `.mdc` source and is **Provider Mirrored** to a translated Claude `.md`.
 - Every Agent Asset install resolves to a **Provider** × **Asset Scope** destination.

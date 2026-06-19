@@ -26,6 +26,7 @@ import sys
 from datetime import datetime
 
 import questionary
+from questionary import Choice
 from rich import print
 from rich.console import Console
 from rich.panel import Panel
@@ -255,7 +256,9 @@ class Logger(BaseLogger):
             raise KeyboardInterrupt()
         return response
 
-    def checkbox(self, message: str, choices: list[str]) -> list[str]:
+    def checkbox(
+        self, message: str, choices: list[str], checked: list[str] | None = None
+    ) -> list[str]:
         """Prompt the user to select zero or more items from a list.
 
         Parameters
@@ -264,6 +267,8 @@ class Logger(BaseLogger):
             The message to display above the checkbox list.
         choices : list[str]
             The available choices.
+        checked : list[str], optional
+            Choices that should be selected by default.
 
         Returns
         -------
@@ -277,8 +282,17 @@ class Logger(BaseLogger):
         """
         if not choices:
             return []
+        checked_set = set(checked or [])
+        rendered_choices = (
+            [
+                Choice(title=choice, value=choice, checked=choice in checked_set)
+                for choice in choices
+            ]
+            if checked is not None
+            else choices
+        )
         response = questionary.checkbox(
-            f"{self.questionary_prefix}{message}", choices=choices
+            f"{self.questionary_prefix}{message}", choices=rendered_choices
         ).ask()
         if response is None:
             raise KeyboardInterrupt()
@@ -453,13 +467,13 @@ class Logger(BaseLogger):
 
         Parameters
         ----------
-        *args :
+        \\*args :
             The arguments to print.
         title : str, optional
             The title of the panel, by default None.
         as_panel : bool, optional
             Whether to print the message in a panel, by default False.
-        **kwargs :
+        \\*\\*kwargs :
             The keyword arguments to print.
         """
         if as_panel:

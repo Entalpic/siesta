@@ -37,6 +37,15 @@ def confirm_no(_message: str, default: bool = True) -> bool:
     return False
 
 
+def confirm_agents_only_yes(message: str, default: bool = True) -> bool:
+    """Confirm AGENTS.md removal and decline CLAUDE.md."""
+    if "AGENTS.md" in message:
+        return True
+    if "CLAUDE.md" in message:
+        return False
+    return default
+
+
 # ---------------------------------------------------------------------------
 # add skill
 # ---------------------------------------------------------------------------
@@ -48,6 +57,14 @@ class TestAddSkill:
         assert (
             tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs" / "SKILL.md"
         ).exists()
+
+    def test_empty_skill_dir_is_not_conflict(self, tmp_path_chdir):
+        # A pre-existing but empty skill dir has nothing to overwrite, so it is not
+        # a Conflict — the skill installs into it without prompting.
+        dest = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs"
+        dest.mkdir(parents=True)
+        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
+        assert (dest / "SKILL.md").exists()
 
     def test_prints_skill_path_relative_to_cwd(self, tmp_path_chdir, capsys):
         run("agents", "add", "skill", "grill-with-docs", "--cursor", "--local")
@@ -92,11 +109,11 @@ class TestAddSkill:
         run("agents", "add", "skill", "grill-with-docs", "--cursor")
         assert (dest / "SKILL.md").read_text() == "mine"
 
-    def test_force_overwrites_existing(self, tmp_path_chdir):
+    def test_overwrite_overwrites_existing(self, tmp_path_chdir):
         dest = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs"
         dest.mkdir(parents=True)
         (dest / "SKILL.md").write_text("old")
-        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--force")
+        run("agents", "add", "skill", "grill-with-docs", "--cursor", "--overwrite")
         assert (dest / "SKILL.md").read_text() != "old"
 
     def test_backup_creates_bak(self, tmp_path_chdir):
@@ -109,7 +126,7 @@ class TestAddSkill:
             "skill",
             "grill-with-docs",
             "--cursor",
-            "--force",
+            "--overwrite",
             "--backup",
         )
         bak = tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs.bak"
@@ -177,11 +194,20 @@ class TestAddRule:
         run("agents", "add", "rule", "python-docstrings", "--cursor")
         assert dest.read_text() == "mine"
 
-    def test_force_overwrites(self, tmp_path_chdir):
+    def test_empty_rule_file_is_still_a_conflict(self, tmp_path_chdir):
+        # An empty file can be intentional, so it is a Conflict: --no-overwrite skips
+        # it and leaves it untouched rather than clobbering it with the bundled rule.
+        dest = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
+        dest.parent.mkdir(parents=True)
+        dest.write_text("")
+        run("agents", "add", "rule", "python-docstrings", "--cursor", "--no-overwrite")
+        assert dest.read_text() == ""
+
+    def test_overwrite_overwrites(self, tmp_path_chdir):
         dest = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
         dest.parent.mkdir(parents=True)
         dest.write_text("old")
-        run("agents", "add", "rule", "python-docstrings", "--cursor", "--force")
+        run("agents", "add", "rule", "python-docstrings", "--cursor", "--overwrite")
         assert dest.read_text() != "old"
 
 
@@ -227,9 +253,9 @@ class TestAddConstitution:
         run("agents", "add", "constitution", "--cursor")
         assert (tmp_path_chdir / "AGENTS.md").read_text() == "mine"
 
-    def test_force_overwrites_agents(self, tmp_path_chdir):
+    def test_overwrite_overwrites_agents(self, tmp_path_chdir):
         (tmp_path_chdir / "AGENTS.md").write_text("old")
-        run("agents", "add", "constitution", "--cursor", "--force")
+        run("agents", "add", "constitution", "--cursor", "--overwrite")
         assert (tmp_path_chdir / "AGENTS.md").read_text() != "old"
 
     def test_claude_md_import_already_present_no_duplicate(self, tmp_path_chdir):
@@ -238,16 +264,24 @@ class TestAddConstitution:
         content = (tmp_path_chdir / "CLAUDE.md").read_text()
         assert content.count(IMPORT_LINE) == 1
 
-    def test_force_prepends_import_to_existing_claude_md(self, tmp_path_chdir):
+    def test_overwrite_prepends_import_to_existing_claude_md(self, tmp_path_chdir):
         (tmp_path_chdir / "CLAUDE.md").write_text("existing content")
-        run("agents", "add", "constitution", "--claude", "--force")
+        run("agents", "add", "constitution", "--claude", "--overwrite")
         content = (tmp_path_chdir / "CLAUDE.md").read_text()
         assert content.startswith(IMPORT_LINE)
         assert "existing content" in content
 
+    def test_claude_never_overwritten(self, tmp_path_chdir):
+        original = "user-authored content stays"
+        (tmp_path_chdir / "CLAUDE.md").write_text(original)
+        run("agents", "add", "constitution", "--claude", "--local", "--overwrite")
+        content = (tmp_path_chdir / "CLAUDE.md").read_text()
+        assert content.startswith(IMPORT_LINE)
+        assert original in content
+
     def test_backup_flag_preserves_old_agents(self, tmp_path_chdir):
         (tmp_path_chdir / "AGENTS.md").write_text("old agents")
-        run("agents", "add", "constitution", "--cursor", "--force", "--backup")
+        run("agents", "add", "constitution", "--cursor", "--overwrite", "--backup")
         assert (tmp_path_chdir / "AGENTS.md.bak").read_text() == "old agents"
 
     def test_local_and_global_abort(self, tmp_path_chdir):
@@ -418,6 +452,97 @@ class TestRemoveConstitution:
         assert code != 0
         assert (tmp_path_chdir / "AGENTS.md").exists()
 
+    def test_stop_when_agents_removal_would_break_claude_import(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Stop now (no files changed)",
+        )
+        run("agents", "add", "constitution")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        assert agents.exists()
+        assert claude.exists()
+        code = run("agents", "remove", "constitution")
+        assert code != 0
+        assert agents.exists()
+        assert claude.exists()
+        assert IMPORT_LINE in claude.read_text()
+
+    def test_keep_agents_when_claude_import_would_break(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Keep AGENTS.md and continue",
+        )
+        run("agents", "add", "constitution")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        code = run("agents", "remove", "constitution")
+        assert code == 0
+        assert agents.exists()
+        assert claude.exists()
+        assert IMPORT_LINE in claude.read_text()
+
+    def test_removes_agents_anyway_when_user_accepts_broken_import(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Continue with selected removals anyway",
+        )
+        run("agents", "add", "constitution")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        code = run("agents", "remove", "constitution")
+        assert code == 0
+        assert not agents.exists()
+        assert claude.exists()
+        assert IMPORT_LINE in claude.read_text()
+
+    def test_cursor_only_detects_local_claude_import_dependency(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_yes)
+        monkeypatch.setattr(
+            logger,
+            "select",
+            lambda _msg, _labels: "Stop now (no files changed)",
+        )
+        run("agents", "add", "constitution", "--cursor")
+        (tmp_path_chdir / "CLAUDE.md").write_text(IMPORT_LINE)
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        code = run("agents", "remove", "constitution", "--cursor")
+        assert code != 0
+        assert agents.exists()
+        assert claude.exists()
+
+    def test_removes_agents_when_claude_has_no_import(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_agents_only_yes)
+        run("agents", "add", "constitution", "--both")
+        (tmp_path_chdir / "CLAUDE.md").write_text("user content only")
+        agents = tmp_path_chdir / "AGENTS.md"
+        claude = tmp_path_chdir / "CLAUDE.md"
+        run("agents", "remove", "constitution", "--both")
+        assert not agents.exists()
+        assert claude.read_text() == "user content only"
+
 
 # ---------------------------------------------------------------------------
 # quickstart
@@ -442,9 +567,60 @@ class TestQuickstart:
         ).exists()
         assert not (tmp_path_chdir / ".claude" / "skills").exists()
 
-    def test_quickstart_force_overwrites(self, tmp_path_chdir):
+    def test_quickstart_overwrite(self, tmp_path_chdir):
         rule = tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc"
         rule.parent.mkdir(parents=True)
         rule.write_text("old")
-        run("agents", "quickstart", "--cursor", "--force")
+        run("agents", "quickstart", "--cursor", "--overwrite")
         assert rule.read_text() != "old"
+
+    def test_quickstart_interactive_selects_by_category(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_yes)
+        checked_defaults: dict[str, list[str] | None] = {}
+
+        def select_subset(
+            message: str, choices: list[str], checked: list[str] | None = None
+        ) -> list[str]:
+            checked_defaults[message] = checked
+            if "Rules" in message:
+                return ["python-docstrings"]
+            if "Skills" in message:
+                return []
+            return choices
+
+        monkeypatch.setattr(logger, "checkbox", select_subset)
+
+        code = run("agents", "quickstart", "-i", "--cursor")
+
+        assert code == 0
+        assert (tmp_path_chdir / "AGENTS.md").exists()
+        assert (tmp_path_chdir / ".cursor" / "rules" / "python-docstrings.mdc").exists()
+        assert not (
+            tmp_path_chdir / ".cursor" / "rules" / "mirror-providers.mdc"
+        ).exists()
+        assert not (tmp_path_chdir / ".cursor" / "skills" / "grill-with-docs").exists()
+        assert checked_defaults["Select quickstart Rules to install:"] == [
+            "python-docstrings",
+            "mirror-providers",
+        ]
+        assert checked_defaults["Select quickstart Skills to install:"] == [
+            "grill-with-docs"
+        ]
+
+    def test_quickstart_interactive_empty_selection_is_no_op(
+        self, tmp_path_chdir, monkeypatch
+    ):
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(logger, "confirm", confirm_no)
+        monkeypatch.setattr(
+            logger, "checkbox", lambda _message, _choices, checked=None: []
+        )
+
+        code = run("agents", "quickstart", "-i", "--cursor")
+
+        assert code == 0
+        assert not (tmp_path_chdir / "AGENTS.md").exists()
+        assert not (tmp_path_chdir / ".cursor").exists()

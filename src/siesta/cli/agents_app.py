@@ -11,20 +11,21 @@ from cyclopts import App, Parameter
 
 from siesta.utils.agents import (
     DEFAULT_CONSTITUTION,
+    ConstitutionMutation,
+    RuleMutation,
+    SkillMutation,
     _display_path,
+    agents_removal_would_break_claude_import,
     available_constitutions,
     available_rules,
     available_skills,
     collect_confirmed_removals,
+    constitution_claude_counterpart_path,
     constitution_paths,
     detect_installed_rules,
     detect_installed_skills,
-    install_constitution,
     install_quickstart,
-    install_rule,
-    install_skill,
-    print_removal_summary,
-    print_summary,
+    load_quickstart,
     remove_constitution,
     remove_rule,
     remove_skill,
@@ -36,13 +37,17 @@ from siesta.utils.agents import (
     skill_target,
 )
 from siesta.utils.common import logger
+from siesta.utils.conflicts import OperationSummary, render_summary, run_mutations
 
 agents_app = App(
     name="agents",
     help=dedent(
         """
-        Install and remove agent assets (Skills, Rules, Constitution) in a
+        Install and remove Agent Assets (Skills, Rules, Constitution) in a
         repository or user home, for Cursor and/or Claude.
+
+        Use ``agents quickstart`` to install the curated default Agent Assets in one
+        step.
 
         Upgrade with ``$ siesta self update``.
         """.strip()
@@ -62,14 +67,6 @@ agents_app.command(add_app)
 agents_app.command(remove_app)
 
 
-def _merge_summaries(
-    combined: dict[str, list[str]], result: dict[str, list[str]]
-) -> None:
-    """Merge one install summary into *combined*."""
-    for key in combined:
-        combined[key].extend(result.get(key, []))
-
-
 # ---------------------------------------------------------------------------
 # add skill / rule / constitution
 # ---------------------------------------------------------------------------
@@ -85,7 +82,7 @@ def add_skill(
     both: bool = False,
     local: bool = False,
     global_: Annotated[bool, Parameter(name=["--global"])] = False,
-    force: bool = False,
+    overwrite: bool | None = None,
     backup: bool = False,
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
 ) -> None:
@@ -112,7 +109,7 @@ def add_skill(
     ----------
     names : list[str], optional
         Skill names to install. Mutually exclusive with ``--all``.
-    all_ : bool, optional
+    all\\_ : bool, optional
         Install all available Skills.
     cursor : bool, optional
         Target the Cursor provider.
@@ -122,16 +119,16 @@ def add_skill(
         Target both providers (default when no provider flag is given).
     local : bool, optional
         Install into the current repository (default).
-    global_ : bool, optional
+    global\\_ : bool, optional
         Install into the user home (``~/.cursor/skills/``, ``~/.claude/skills/``).
-    force : bool, optional
-        Overwrite existing targets without prompting.
+    overwrite : bool | None, optional
+        How to handle existing targets: ``True`` overwrite, ``False`` skip,
+        ``None`` prompt/abort.
     backup : bool, optional
         Back up existing targets before overwriting.
     interactive : bool, optional
-        Enable interactive prompts for each conflict (``-i``).
+        Enable interactive selection of assets to add (``-i``).
     """
-    # --- Validation phase ---
     scope = resolve_scope(local, global_)
     providers = resolve_providers(cursor, claude, both)
 
@@ -143,20 +140,12 @@ def add_skill(
         logger.info("No skills selected; nothing to do.")
         sys.exit(0)
 
-    # --- Execution phase ---
-    combined: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
-    for name in selected:
-        result = install_skill(
-            name,
-            providers,
-            scope,
-            force=force,
-            backup=backup,
-            interactive=interactive,
-        )
-        _merge_summaries(combined, result)
-
-    print_summary(combined)
+    summary = run_mutations(
+        [SkillMutation(n, providers, scope) for n in selected],
+        overwrite=overwrite,
+        backup=backup,
+    )
+    render_summary(summary)
 
 
 @add_app.command(name="rule")
@@ -169,7 +158,7 @@ def add_rule(
     both: bool = False,
     local: bool = False,
     global_: Annotated[bool, Parameter(name=["--global"])] = False,
-    force: bool = False,
+    overwrite: bool | None = None,
     backup: bool = False,
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
 ) -> None:
@@ -196,7 +185,7 @@ def add_rule(
     ----------
     names : list[str], optional
         Rule names to install (without extension). Mutually exclusive with ``--all``.
-    all_ : bool, optional
+    all\\_ : bool, optional
         Install all available Rules.
     cursor : bool, optional
         Target the Cursor provider.
@@ -206,16 +195,16 @@ def add_rule(
         Target both providers (default when no provider flag is given).
     local : bool, optional
         Install into the current repository (default).
-    global_ : bool, optional
+    global\\_ : bool, optional
         Install into the user home (``~/.cursor/rules/``, ``~/.claude/rules/``).
-    force : bool, optional
-        Overwrite existing targets without prompting.
+    overwrite : bool | None, optional
+        How to handle existing targets: ``True`` overwrite, ``False`` skip,
+        ``None`` prompt/abort.
     backup : bool, optional
         Back up existing targets before overwriting.
     interactive : bool, optional
-        Enable interactive prompts for each conflict (``-i``).
+        Enable interactive selection of assets to add (``-i``).
     """
-    # --- Validation phase ---
     scope = resolve_scope(local, global_)
     providers = resolve_providers(cursor, claude, both)
 
@@ -227,20 +216,12 @@ def add_rule(
         logger.info("No rules selected; nothing to do.")
         sys.exit(0)
 
-    # --- Execution phase ---
-    combined: dict[str, list[str]] = {"written": [], "skipped": [], "backed_up": []}
-    for name in selected:
-        result = install_rule(
-            name,
-            providers,
-            scope,
-            force=force,
-            backup=backup,
-            interactive=interactive,
-        )
-        _merge_summaries(combined, result)
-
-    print_summary(combined)
+    summary = run_mutations(
+        [RuleMutation(n, providers, scope) for n in selected],
+        overwrite=overwrite,
+        backup=backup,
+    )
+    render_summary(summary)
 
 
 @add_app.command(name="constitution")
@@ -252,9 +233,8 @@ def add_constitution(
     both: bool = False,
     local: bool = False,
     global_: Annotated[bool, Parameter(name=["--global"])] = False,
-    force: bool = False,
+    overwrite: bool | None = None,
     backup: bool = False,
-    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
 ) -> None:
     """Install a Constitution (AGENTS.md + optional CLAUDE.md stub).
 
@@ -290,17 +270,15 @@ def add_constitution(
         Target both providers (default when no provider flag is given).
     local : bool, optional
         Install into the current repository (default).
-    global_ : bool, optional
+    global\\_ : bool, optional
         Install into the user home. Note: Cursor has no global constitution
         concept; the Cursor side is skipped with a warning.
-    force : bool, optional
-        Overwrite existing targets without prompting.
+    overwrite : bool | None, optional
+        How to handle existing targets: ``True`` overwrite, ``False`` skip,
+        ``None`` prompt/abort.
     backup : bool, optional
         Back up existing targets before overwriting.
-    interactive : bool, optional
-        Enable interactive prompts for each conflict (``-i``).
     """
-    # --- Validation phase ---
     scope = resolve_scope(local, global_)
     providers = resolve_providers(cursor, claude, both)
 
@@ -308,16 +286,12 @@ def add_constitution(
     if name not in available:
         logger.abort(f"Unknown constitution: {name!r}. Available: {available}")
 
-    # --- Execution phase ---
-    summary = install_constitution(
-        name,
-        providers,
-        scope,
-        force=force,
+    summary = run_mutations(
+        [ConstitutionMutation(name, providers, scope)],
+        overwrite=overwrite,
         backup=backup,
-        interactive=interactive,
     )
-    print_summary(summary)
+    render_summary(summary)
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +341,7 @@ def remove_skill_cmd(
         Target both providers (default when no provider flag is given).
     local : bool, optional
         Remove from the current repository (default).
-    global_ : bool, optional
+    global\\_ : bool, optional
         Remove from the user home.
     backup : bool, optional
         Back up targets before removing.
@@ -399,15 +373,15 @@ def remove_skill_cmd(
     confirmed, skipped = _confirm_removal_candidates(candidates)
 
     # --- Execution phase ---
-    combined: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
-    combined["skipped"].extend(skipped)
+    combined = OperationSummary()
+    combined.skipped.extend(skipped)
 
     confirmed_by_name = _group_confirmed_providers(confirmed)
     for skill_name, confirmed_providers in confirmed_by_name.items():
         result = remove_skill(skill_name, confirmed_providers, scope, backup=backup)
-        _merge_removal_summaries(combined, result)
+        combined.merge(result)
 
-    print_removal_summary(combined)
+    render_summary(combined)
 
 
 @remove_app.command(name="rule")
@@ -452,7 +426,7 @@ def remove_rule_cmd(
         Target both providers (default when no provider flag is given).
     local : bool, optional
         Remove from the current repository (default).
-    global_ : bool, optional
+    global\\_ : bool, optional
         Remove from the user home.
     backup : bool, optional
         Back up targets before removing.
@@ -484,15 +458,15 @@ def remove_rule_cmd(
     confirmed, skipped = _confirm_removal_candidates(candidates)
 
     # --- Execution phase ---
-    combined: dict[str, list[str]] = {"removed": [], "skipped": [], "backed_up": []}
-    combined["skipped"].extend(skipped)
+    combined = OperationSummary()
+    combined.skipped.extend(skipped)
 
     confirmed_by_name = _group_confirmed_providers(confirmed)
     for rule_name, confirmed_providers in confirmed_by_name.items():
         result = remove_rule(rule_name, confirmed_providers, scope, backup=backup)
-        _merge_removal_summaries(combined, result)
+        combined.merge(result)
 
-    print_removal_summary(combined)
+    render_summary(combined)
 
 
 @remove_app.command(name="constitution")
@@ -506,7 +480,6 @@ def remove_constitution_cmd(
     global_: Annotated[bool, Parameter(name=["--global"])] = False,
     force: bool = False,
     backup: bool = False,
-    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
 ) -> None:
     """Remove detected Constitution files (AGENTS.md / CLAUDE.md).
 
@@ -514,6 +487,12 @@ def remove_constitution_cmd(
     matches a bundled Constitution source unless ``--force`` is passed.
     ``CLAUDE.md`` import stubs may be deleted; mixed content keeps the body and
     drops only the ``@AGENTS.md`` import line.
+
+    Removing ``AGENTS.md`` alone is blocked before any mutation when it would
+    leave ``CLAUDE.md`` with a broken ``@AGENTS.md`` import. The command
+    suggests manual cleanup (remove the pointer, copy content, or remove
+    ``CLAUDE.md`` too) and lets you stop, keep ``AGENTS.md``, or continue
+    with your selected removals anyway.
 
     Examples
     --------
@@ -535,16 +514,14 @@ def remove_constitution_cmd(
         Target both providers (default when no provider flag is given).
     local : bool, optional
         Remove from the current repository (default).
-    global_ : bool, optional
+    global\\_ : bool, optional
         Remove from the user home.
     force : bool, optional
         Allow removing user-authored Constitution files after confirmation.
     backup : bool, optional
         Back up targets before removing or rewriting.
-    interactive : bool, optional
-        Reserved for future selection flows; confirmations are always required.
     """
-    del name, interactive  # constitution removal always confirms each file explicitly
+    del name  # constitution removal always confirms each file explicitly
 
     # --- Validation phase ---
     scope = resolve_scope(local, global_)
@@ -556,7 +533,7 @@ def remove_constitution_cmd(
             "Constitution is project-scoped for Cursor; nothing to do globally. "
             "Tip: use --local (default) or --claude to target Claude's global ~/.claude/."
         )
-        print_removal_summary({"removed": [], "skipped": [], "backed_up": []})
+        render_summary(OperationSummary())
         return
 
     # --- Prompt collection phase ---
@@ -576,9 +553,49 @@ def remove_constitution_cmd(
         label = f"CLAUDE.md ({_display_path(claude_path)})"
         confirmed_claude = logger.confirm(f"Remove {label}?")
 
+    if (
+        confirmed_agents
+        and agents_path
+        and agents_removal_would_break_claude_import(
+            scope,
+            agents_path,
+            force=force,
+            confirmed_claude=confirmed_claude,
+        )
+    ):
+        counterpart = constitution_claude_counterpart_path(scope)
+        display_claude = _display_path(counterpart)
+        choice = logger.select(
+            f"Removing AGENTS.md would leave {display_claude} with a broken "
+            "@AGENTS.md pointer. Before removing AGENTS.md, you can manually: "
+            "remove the @AGENTS.md line from CLAUDE.md, copy the needed "
+            "AGENTS.md content into CLAUDE.md, or remove CLAUDE.md too. "
+            "What do you want to do now?",
+            [
+                "Stop now (no files changed)",
+                "Keep AGENTS.md and continue",
+                "Continue with selected removals anyway",
+            ],
+        )
+        if choice == "Stop now (no files changed)":
+            logger.abort("Aborted.")
+        elif choice == "Keep AGENTS.md and continue":
+            confirmed_agents = False
+
     if not confirmed_agents and not confirmed_claude:
         logger.info("No constitution files confirmed; nothing to do.")
         sys.exit(0)
+
+    allow_broken_claude_import = (
+        confirmed_agents
+        and agents_path is not None
+        and agents_removal_would_break_claude_import(
+            scope,
+            agents_path,
+            force=force,
+            confirmed_claude=confirmed_claude,
+        )
+    )
 
     # --- Execution phase ---
     summary = remove_constitution(
@@ -588,8 +605,9 @@ def remove_constitution_cmd(
         backup=backup,
         confirmed_agents=confirmed_agents,
         confirmed_claude=confirmed_claude,
+        allow_broken_claude_import=allow_broken_claude_import,
     )
-    print_removal_summary(summary)
+    render_summary(summary)
 
 
 def _require_tty() -> None:
@@ -656,17 +674,50 @@ def _group_confirmed_providers(
     return grouped
 
 
-def _merge_removal_summaries(
-    combined: dict[str, list[str]], result: dict[str, list[str]]
-) -> None:
-    """Merge one removal summary into *combined*."""
-    for key in combined:
-        combined[key].extend(result.get(key, []))
-
-
 # ---------------------------------------------------------------------------
 # quickstart
 # ---------------------------------------------------------------------------
+
+
+def _collect_quickstart_selection(cfg: dict) -> dict[str, object]:
+    """Collect interactive category selections for ``agents quickstart``."""
+    if not sys.stdin.isatty():
+        logger.abort("Interactive quickstart selection requires a terminal (no TTY).")
+
+    constitution = cfg["constitution"]
+    selected_constitution = (
+        constitution
+        if constitution
+        and logger.confirm(
+            f"Install quickstart Constitution {constitution!r}?",
+            default=True,
+        )
+        else None
+    )
+    selected_rules = (
+        logger.checkbox(
+            "Select quickstart Rules to install:",
+            list(cfg["rules"]),
+            checked=list(cfg["rules"]),
+        )
+        if cfg["rules"]
+        else []
+    )
+    selected_skills = (
+        logger.checkbox(
+            "Select quickstart Skills to install:",
+            list(cfg["skills"]),
+            checked=list(cfg["skills"]),
+        )
+        if cfg["skills"]
+        else []
+    )
+    selected = {
+        "skills": selected_skills,
+        "rules": selected_rules,
+        "constitution": selected_constitution,
+    }
+    return selected
 
 
 @agents_app.command(name="quickstart")
@@ -677,7 +728,7 @@ def quickstart(
     both: bool = False,
     local: bool = False,
     global_: Annotated[bool, Parameter(name=["--global"])] = False,
-    force: bool = False,
+    overwrite: bool | None = None,
     backup: bool = False,
     interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
 ) -> None:
@@ -688,6 +739,8 @@ def quickstart(
     ``add rule``, and ``add constitution`` for each listed asset.
 
     Defaults to ``--local`` and both Providers when no flags are given.
+    Existing assets are handled via Conflict Resolution — use ``--overwrite``
+    to overwrite or ``--backup`` to back up before overwriting.
 
     Examples
     --------
@@ -699,8 +752,8 @@ def quickstart(
         # Install globally for Claude only
         $ siesta agents quickstart --global --claude
 
-        # Force-overwrite any existing assets
-        $ siesta agents quickstart --force
+        # Overwrite any existing assets without prompting
+        $ siesta agents quickstart --overwrite
 
     Parameters
     ----------
@@ -712,21 +765,21 @@ def quickstart(
         Target both providers (default when no provider flag is given).
     local : bool, optional
         Install into the current repository (default).
-    global_ : bool, optional
+    global\\_ : bool, optional
         Install into the user home (``~/.cursor/skills/``, ``~/.claude/skills/``).
-    force : bool, optional
-        Overwrite existing targets without prompting.
+    overwrite : bool | None, optional
+        How to handle existing targets: ``True`` overwrite, ``False`` skip,
+        ``None`` prompt/abort.
     backup : bool, optional
         Back up existing targets before overwriting.
     interactive : bool, optional
-        Enable interactive prompts for each conflict (``-i``).
+        Select which curated Constitution, Rules, and Skills to install.
     """
-    # --- Validation phase ---
     scope = resolve_scope(local, global_)
     providers = resolve_providers(cursor, claude, both)
 
-    # --- Execution phase ---
+    cfg = _collect_quickstart_selection(load_quickstart()) if interactive else None
     summary = install_quickstart(
-        providers, scope, force=force, backup=backup, interactive=interactive
+        providers, scope, overwrite=overwrite, backup=backup, cfg=cfg
     )
-    print_summary(summary)
+    render_summary(summary)
