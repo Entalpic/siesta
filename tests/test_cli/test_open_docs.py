@@ -71,4 +71,4 @@ def test_open_docs(module_test_path, capture_output, platform, monkeypatch):
                             )
                         )
     assert "Opening" in output.getvalue()
-    assert re.search(r"index\s*\.html", output.getvalue())
+    assert re.search("index.html", output.getvalue().replace("\n", ""))
