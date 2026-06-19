@@ -412,7 +412,9 @@ def setup_tests(
 
     mutations: list[Mutation] = []
     if deps:
-        mutations.append(TestDepsMutation(["pytest", "pytest-cov"], has_uv))
+        mutations.append(
+            TestDepsMutation(["pytest", "pytest-cov", "pytest-xdist[psutil]"], has_uv)
+        )
     mutations.append(TestsInfraMutation(project_name))
     if actions:
         mutations.append(TestActionsMutation())

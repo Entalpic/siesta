@@ -89,7 +89,7 @@ def write_test_actions_config() -> None:
                     },
                     {
                         "name": "Run tests",
-                        "run": "uv run pytest",
+                        "run": "uv run pytest -n auto",
                     },
                 ],
             },

@@ -11,5 +11,13 @@
         "myst-parser>=4.0.1",
         "matplotlib>=3.10.6"
     ],
-    "dev": ["ipdb", "ipython", "pytest", "pytest-cov", "ruff", "pre-commit"]
+    "dev": [
+        "ipdb",
+        "ipython",
+        "pytest",
+        "pytest-cov",
+        "pytest-xdist[psutil]",
+        "ruff",
+        "pre-commit"
+    ]
 }
