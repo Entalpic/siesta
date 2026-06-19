@@ -12,7 +12,7 @@ from rich import print as rprint
 from siesta.cli._shared import resolve_shell
 from siesta.completions import Shell
 from siesta.utils import github
-from siesta.utils.common import load_deps, logger
+from siesta.utils.common import escape_left_square_brackets, load_deps, logger
 from siesta.utils.github import (
     get_latest_commit_info,
     get_latest_github_release_version,
@@ -318,11 +318,18 @@ def show_deps(as_pip: bool = False):
     """
     deps = load_deps()
     if as_pip:
-        logger.print(" ".join([d for k in deps for d in deps[k]]))
+        logger.print(
+            " ".join([escape_left_square_brackets(d) for k in deps for d in deps[k]])
+        )
     else:
         logger.print("Dependencies:")
         for scope in deps:
-            logger.print("  • " + scope + ": " + " ".join(deps[scope]))
+            logger.print(
+                "  • "
+                + scope
+                + ": "
+                + " ".join(list(map(escape_left_square_brackets, deps[scope])))
+            )
 
 
 @self_app.command(name="version")

@@ -212,3 +212,21 @@ def get_project_name(interactive: bool = False, snake_case: bool = False) -> str
     if snake_case:
         name = name.lower().replace(" ", "_").replace("-", "_")
     return name
+
+
+def escape_left_square_brackets(text: str) -> str:
+    """Escape left square brackets in a string for use in a shell command.
+
+    Needed for rich print not to interpret square brackets as markup.
+
+    Parameters
+    ----------
+    text : str
+        The text to escape.
+
+    Returns
+    -------
+    str
+        The escaped text with left square brackets escaped.
+    """
+    return text.replace("[", r"\[")
