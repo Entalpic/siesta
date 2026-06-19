@@ -39,10 +39,10 @@ def test_init_docs_no_overwrite(
     docs_dir.mkdir()
     (docs_dir / "existing.rst").write_text("keep me")
 
-    with pytest.raises(SystemExit) as exc_info:
-        with capture_output() as output:
+    with capture_output() as output:
+        with pytest.raises(SystemExit) as exc_info:
             app(["docs", "init"])
-        assert "Path already exists" in output.getvalue()
+        assert "already exists" in output.getvalue()
 
     assert exc_info.value.code == 1
 

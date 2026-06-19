@@ -395,8 +395,9 @@ class IpdbMutation:
             return summary
         overwrite = resolution is Resolution.OVERWRITE
         add_ipdb_as_debugger(overwrite=overwrite)
-        if resolution is not None:
-            summary.written.append("ipdb debugger")
+        # Record the write whether it was a fresh add (no conflict, resolution None)
+        # or an overwrite — both produced a change render_summary should report.
+        summary.written.append("ipdb debugger")
         logger.info("[r]ipdb[/r] added as debugger.")
         return summary
 

@@ -15,6 +15,14 @@ from siesta.utils.common import logger
 
 
 class Resolution(StrEnum):
+    """How a single Conflict is resolved before any write.
+
+    ``SKIP`` keeps the existing artifact, ``OVERWRITE`` replaces it, ``BACKUP``
+    renames it to ``.bak`` then writes, ``MERGE`` prepends new content while
+    preserving the existing file (the ``CLAUDE.md`` import-stub case), and
+    ``ABORT`` stops the run before any Mutation (intercepted in ``run_mutations``).
+    """
+
     SKIP = "skip"
     OVERWRITE = "overwrite"
     BACKUP = "backup"
@@ -24,6 +32,16 @@ class Resolution(StrEnum):
 
 @dataclass(frozen=True)
 class Conflict:
+    """A pre-existing artifact a Mutation would overwrite, with its allowed Resolutions.
+
+    ``key`` MUST be unique across every Mutation in a single ``run_mutations`` call:
+    resolutions are stored in one shared dict keyed by ``key``, and each
+    :meth:`Mutation.apply` reads its decision back by the same key. Two Conflicts
+    sharing a key would clobber each other's resolution. Callers namespace keys
+    accordingly (for example ``skill:<name>:<provider>``, ``constitution:agents``).
+    ``options`` is the subset of :class:`Resolution` offered for this Conflict.
+    """
+
     key: str
     name: str
     options: frozenset[Resolution]
@@ -31,6 +49,8 @@ class Conflict:
 
 @dataclass
 class OperationSummary:
+    """Accumulated outcomes of applying Mutations, rendered by :func:`render_summary`."""
+
     written: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     backed_up: list[str] = field(default_factory=list)
@@ -91,6 +111,10 @@ def write_path(
     """Perform the filesystem action for one destination given its resolved action."""
     if resolution is Resolution.SKIP:
         return Resolution.SKIP
+    # write_path only owns SKIP/BACKUP/OVERWRITE: MERGE is content-specific and handled
+    # by the owning Mutation, ABORT is intercepted in run_mutations before any apply.
+    if resolution not in (Resolution.OVERWRITE, Resolution.BACKUP):
+        raise ValueError(f"write_path cannot perform resolution {resolution!r}")
     if resolution is Resolution.BACKUP:
         apply_backup(dest)
     elif resolution is Resolution.OVERWRITE and dest.exists() and dest.is_dir():
@@ -153,6 +177,15 @@ def resolve_conflict(
 
 @runtime_checkable
 class Mutation(Protocol):
+    """One project-state change driven by :func:`run_mutations`.
+
+    The Ordering Contract is structural: ``run_mutations`` calls every
+    :meth:`detect_conflicts` and resolves all Conflicts before invoking any
+    :meth:`apply`, so ``apply`` never prompts. ``apply`` receives the full
+    ``resolutions`` map (keyed by :attr:`Conflict.key`) and reads back only the
+    decisions for the Conflicts it reported.
+    """
+
     def detect_conflicts(self) -> list[Conflict]: ...
     def apply(self, resolutions: Mapping[str, Resolution]) -> OperationSummary: ...
 

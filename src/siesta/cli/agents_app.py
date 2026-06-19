@@ -235,7 +235,6 @@ def add_constitution(
     global_: Annotated[bool, Parameter(name=["--global"])] = False,
     overwrite: bool | None = None,
     backup: bool = False,
-    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
 ) -> None:
     """Install a Constitution (AGENTS.md + optional CLAUDE.md stub).
 
@@ -279,10 +278,7 @@ def add_constitution(
         ``None`` prompt/abort.
     backup : bool, optional
         Back up existing targets before overwriting.
-    interactive : bool, optional
-        Reserved; constitution install uses the unified conflict resolver.
     """
-    del interactive
     scope = resolve_scope(local, global_)
     providers = resolve_providers(cursor, claude, both)
 
@@ -484,7 +480,6 @@ def remove_constitution_cmd(
     global_: Annotated[bool, Parameter(name=["--global"])] = False,
     force: bool = False,
     backup: bool = False,
-    interactive: Annotated[bool, Parameter(name=["-i", "--interactive"])] = False,
 ) -> None:
     """Remove detected Constitution files (AGENTS.md / CLAUDE.md).
 
@@ -525,10 +520,8 @@ def remove_constitution_cmd(
         Allow removing user-authored Constitution files after confirmation.
     backup : bool, optional
         Back up targets before removing or rewriting.
-    interactive : bool, optional
-        Reserved for future selection flows; confirmations are always required.
     """
-    del name, interactive  # constitution removal always confirms each file explicitly
+    del name  # constitution removal always confirms each file explicitly
 
     # --- Validation phase ---
     scope = resolve_scope(local, global_)
